@@ -213,8 +213,10 @@ class MovieRankingSession:
                 "language": "en-US",
                 "without_genres": "99",  # Exclude documentaries
                 "with_runtime.gte": 40,  # Only movies 40+ minutes (excludes shorts)
-                "with_release_type": "2|3",  # Only theatrical releases (Limited or Wide)
-                "include_video": False  # Exclude direct-to-video/non-theatrical
+                # Release types: 2=Theatrical Limited, 3=Theatrical Wide, 4=Digital (streaming)
+                # Include both theatrical and digital to catch streaming-exclusive releases
+                "with_release_type": "2|3|4",  # Theatrical + Digital releases (includes streaming)
+                "include_video": False  # Exclude direct-to-video format (not about streaming platforms)
             }
             
             all_movies = []
