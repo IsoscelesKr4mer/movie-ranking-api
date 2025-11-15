@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Ranking App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎬 Movie Ranking App</h1>
+            <p>Rank your favorite movies using binary comparisons</p>
+        </header>
+
+        <!-- Configuration Section -->
+        <section id="config-section" class="section">
+            <h2>Setup</h2>
+            <div class="config-form">
+                <div class="form-group">
+                    <label for="api-url">API URL:</label>
+                    <input type="text" id="api-url" value="https://movie-ranking-api-ea3e.onrender.com" placeholder="https://your-api-url.com">
+                </div>
+                <div class="form-group">
+                    <label for="movie-year">Year:</label>
+                    <input type="number" id="movie-year" value="2024" min="1900" max="2030">
+                </div>
+                <div class="form-group">
+                    <label for="max-movies">Max Movies:</label>
+                    <input type="number" id="max-movies" value="20" min="1" max="100">
+                </div>
+                <button id="create-session-btn" class="btn btn-primary">Create Session & Load Movies</button>
+            </div>
+            <div id="session-info" class="session-info hidden">
+                <p><strong>Session ID:</strong> <span id="session-id"></span></p>
+                <p><strong>Status:</strong> <span id="session-status">Loading...</span></p>
+            </div>
+        </section>
+
+        <!-- Ranking Section -->
+        <section id="ranking-section" class="section hidden">
+            <h2>Ranking</h2>
+            <div id="ranking-controls" class="controls">
+                <button id="start-ranking-btn" class="btn btn-success">Start Ranking</button>
+                <button id="get-status-btn" class="btn btn-info">Check Status</button>
+                <button id="get-results-btn" class="btn btn-warning">View Results</button>
+                <button id="reset-btn" class="btn btn-secondary">Reset</button>
+            </div>
+
+            <!-- Current Comparison -->
+            <div id="comparison-container" class="comparison-container hidden">
+                <div class="comparison-header">
+                    <h3>Which movie do you prefer?</h3>
+                    <p id="comparison-progress"></p>
+                </div>
+                <div class="movies-comparison">
+                    <div class="movie-card" id="left-movie">
+                        <div class="movie-poster">
+                            <img id="left-poster" src="" alt="Movie poster">
+                        </div>
+                        <div class="movie-info">
+                            <h4 id="left-title"></h4>
+                            <p id="left-year"></p>
+                            <p id="left-rating"></p>
+                            <p class="movie-overview" id="left-overview"></p>
+                        </div>
+                        <button class="btn btn-choice" data-choice="left">Choose This 🎬</button>
+                    </div>
+
+                    <div class="vs-divider">
+                        <span>VS</span>
+                    </div>
+
+                    <div class="movie-card" id="right-movie">
+                        <div class="movie-poster">
+                            <img id="right-poster" src="" alt="Movie poster">
+                        </div>
+                        <div class="movie-info">
+                            <h4 id="right-title"></h4>
+                            <p id="right-year"></p>
+                            <p id="right-rating"></p>
+                            <p class="movie-overview" id="right-overview"></p>
+                        </div>
+                        <button class="btn btn-choice" data-choice="right">Choose This 🎬</button>
+                    </div>
+                </div>
+                <div class="skip-container">
+                    <button class="btn btn-skip" data-choice="skip">Skip (Haven't seen both)</button>
+                </div>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <p>Loading...</p>
+            </div>
+        </section>
+
+        <!-- Results Section -->
+        <section id="results-section" class="section hidden">
+            <h2>Final Ranking Results</h2>
+            <div id="results-container"></div>
+        </section>
+
+        <!-- Status Messages -->
+        <div id="messages"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
