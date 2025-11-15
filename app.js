@@ -491,6 +491,13 @@ async function loadCategories() {
         
         // Populate category dropdown
         movieCategorySelect.innerHTML = '<option value="">Select a category...</option>';
+        
+        if (Object.keys(categories).length === 0) {
+            movieCategorySelect.innerHTML = '<option value="">No categories available</option>';
+            showMessage('No categories found. The API may still be deploying.', 'info');
+            return;
+        }
+        
         for (const [id, info] of Object.entries(categories)) {
             const option = document.createElement('option');
             option.value = id;
@@ -499,7 +506,13 @@ async function loadCategories() {
         }
     } catch (error) {
         console.error('Failed to load categories:', error);
-        movieCategorySelect.innerHTML = '<option value="">Error loading categories</option>';
+        movieCategorySelect.innerHTML = '<option value="">Error loading categories (try refreshing)</option>';
+        showMessage('Failed to load categories. The API endpoint may not be deployed yet. Try refreshing the page.', 'error');
+        
+        // Try again after a delay
+        setTimeout(() => {
+            loadCategories();
+        }, 5000);
     }
 }
 
