@@ -177,12 +177,20 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
-        # Prefer collection for all categories (most reliable and curated)
-        # Only use keyword as fallback if collection doesn't work
-        if cat_info.get("collection_id"):
+        # For MCU, prefer keyword with proper filters (ensures only theatrical releases)
+        # For other categories, prefer collection (more reliable and curated)
+        if category == "marvel_mcu" and cat_info.get("keyword_id"):
+            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
+            # If keyword didn't return enough, fall back to collection
+            if len(movies) < 20:  # MCU should have ~30+ movies
+                print(f"Keyword returned only {len(movies)} movies, trying collection...")
+                movies = []
+        
+        # Try collection (most reliable for curated lists, or as fallback for MCU)
+        if not movies and cat_info.get("collection_id"):
             movies = self._load_from_collection(cat_info["collection_id"], max_movies)
         
-        # Fall back to keyword only if collection didn't work (and keyword exists)
+        # Fall back to keyword only if collection didn't work (for categories with keywords)
         if not movies and cat_info.get("keyword_id"):
             movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
         
