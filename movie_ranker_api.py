@@ -283,6 +283,9 @@ class MovieRankingSession:
                     break
                 page += 1
             
+            # Sort movies by release date (earliest first) - API already sorts, but ensure consistency
+            all_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
+            
             print(f"Loaded {len(all_movies)} theatrical movies from keyword {keyword_id}")
             return all_movies
         except Exception as e:
@@ -337,6 +340,9 @@ class MovieRankingSession:
                     if len(movies) >= max_movies:
                         break
             
+            # Sort movies by release date (earliest first)
+            movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
+            
             print(f"Loaded {len(movies)} movies from collection {collection_id} (total parts: {len(parts)})")
             return movies
         except Exception as e:
@@ -359,6 +365,9 @@ class MovieRankingSession:
             except Exception as e:
                 print(f"Error loading movie {movie_id}: {e}")
                 continue
+        
+        # Sort movies by release date (earliest first)
+        movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
         
         return movies
     
