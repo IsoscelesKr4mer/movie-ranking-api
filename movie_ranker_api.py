@@ -272,10 +272,15 @@ class MovieRankingSession:
             for movie in parts:
                 # Filter: only include actual theatrical movies (collections can include shorts/TV)
                 if movie.get("title") and movie.get("release_date"):
-                    # Skip very old or very new movies that might be shorts/documentaries
-                    # Or movies with very low popularity
+                    # Skip very low vote items (likely shorts/documentaries/obscure releases)
+                    # But be less strict for collections (they're already curated)
                     vote_count = movie.get("vote_count", 0)
-                    if vote_count < 20:  # Skip low-vote items
+                    if vote_count < 10:  # Only skip items with very few votes (likely obscure)
+                        continue
+                    
+                    # Check media type - skip if it's a TV show (if available in data)
+                    media_type = movie.get("media_type")
+                    if media_type == "tv":  # Skip TV shows if present
                         continue
                     
                     formatted_movie = self._format_movie(movie)
