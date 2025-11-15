@@ -210,7 +210,11 @@ class MovieRankingSession:
                 "with_keywords": keyword_id,
                 "sort_by": "release_date.asc",
                 "include_adult": False,
-                "language": "en-US"
+                "language": "en-US",
+                "without_genres": "99",  # Exclude documentaries
+                "with_runtime.gte": 40,  # Only movies 40+ minutes (excludes shorts)
+                "with_release_type": "2|3",  # Only theatrical releases (Limited or Wide)
+                "include_video": False  # Exclude direct-to-video/non-theatrical
             }
             
             all_movies = []
@@ -228,19 +232,14 @@ class MovieRankingSession:
                     break
                 
                 for movie in results:
-                    # Strict filtering: only theatrical movies with proper releases
+                    # Basic validation - API filters should handle most filtering
                     if not movie.get("title") or not movie.get("release_date"):
                         continue
                     
-                    # Filter out low-vote items (shorts, obscure releases, TV movies)
-                    vote_count = movie.get("vote_count", 0)
-                    if vote_count < 100:  # Require at least 100 votes (real theatrical releases)
-                        continue
-                    
-                    # Exclude documentaries and certain genres
+                    # Additional safety check: exclude TV movies by genre if present
                     genre_ids = movie.get("genre_ids", [])
-                    # 99 = Documentary, 10402 = TV Movie
-                    if 99 in genre_ids or 10402 in genre_ids:
+                    # 10402 = TV Movie (though with_release_type should exclude these)
+                    if 10402 in genre_ids:
                         continue
                     
                     formatted_movie = self._format_movie(movie)
@@ -257,7 +256,7 @@ class MovieRankingSession:
                     break
                 page += 1
             
-            print(f"Loaded {len(all_movies)} movies from keyword {keyword_id}")
+            print(f"Loaded {len(all_movies)} theatrical movies from keyword {keyword_id}")
             return all_movies
         except Exception as e:
             print(f"Error loading from keyword {keyword_id}: {e}")
