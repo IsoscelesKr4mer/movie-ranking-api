@@ -212,7 +212,7 @@ class MovieRankingSession:
                 "include_adult": False,
                 "language": "en-US",
                 "without_genres": "99",  # Exclude documentaries
-                "with_runtime.gte": 40,  # Only movies 40+ minutes (excludes shorts)
+                "with_runtime.gte": 60,  # Only feature films 60+ minutes (excludes shorts and TV specials ~45-55 min)
                 # Release types: 2=Theatrical Limited, 3=Theatrical Wide, 4=Digital (streaming)
                 # Include both theatrical and digital to catch streaming-exclusive releases
                 "with_release_type": "2|3|4",  # Theatrical + Digital releases (includes streaming)
@@ -236,6 +236,17 @@ class MovieRankingSession:
                 for movie in results:
                     # Basic validation - API filters should handle most filtering
                     if not movie.get("title") or not movie.get("release_date"):
+                        continue
+                    
+                    # Exclude known TV specials by title (Disney+ specials that slip through)
+                    title_lower = movie.get("title", "").lower()
+                    if any(keyword in title_lower for keyword in ["special", "holiday special", "werewolf by night"]):
+                        continue
+                    
+                    # Additional runtime check - feature films are typically 70+ minutes
+                    # (API filter is 60, but some TV specials are 45-60 min)
+                    runtime = movie.get("runtime", 0)
+                    if runtime > 0 and runtime < 70:  # Skip if runtime is less than 70 minutes
                         continue
                     
                     # Additional safety check: exclude TV movies by genre if present
