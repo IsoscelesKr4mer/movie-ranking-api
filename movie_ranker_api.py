@@ -299,6 +299,28 @@ class MovieRankingSession:
 
 # API Endpoints
 
+@app.route('/', methods=['GET'])
+def root():
+    """Root endpoint with API information"""
+    return jsonify({
+        "name": "Movie Ranking API",
+        "version": "1.0.0",
+        "description": "REST API for ranking movies using merge sort algorithm",
+        "endpoints": {
+            "health": "/api/health",
+            "create_session": "/api/session/create",
+            "load_movies": "/api/session/<session_id>/movies/load",
+            "start_ranking": "/api/session/<session_id>/ranking/start",
+            "get_current": "/api/session/<session_id>/ranking/current",
+            "make_choice": "/api/session/<session_id>/ranking/choice",
+            "get_status": "/api/session/<session_id>/ranking/status",
+            "get_results": "/api/session/<session_id>/ranking/results",
+            "delete_session": "/api/session/<session_id>"
+        },
+        "documentation": "See README_API.md for detailed API documentation",
+        "github": "https://github.com/IsoscelesKr4mer/movie-ranking-api"
+    }), 200
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
