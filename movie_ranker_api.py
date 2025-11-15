@@ -7,7 +7,8 @@ import uuid
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend integration
+# Enable CORS for all routes and origins
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 # Configuration
 API_BASE = "https://api.themoviedb.org/3"
