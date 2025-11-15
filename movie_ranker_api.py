@@ -187,7 +187,7 @@ class MovieRankingSession:
         
         return movies
     
-    def _load_from_collection(self, collection_id: int, max_movies: int = 50):
+    def _load_from_collection(self, collection_id: int, max_movies: int = 100):
         """Load movies from a TMDb collection"""
         try:
             url = f"{API_BASE}/collection/{collection_id}"
@@ -197,10 +197,21 @@ class MovieRankingSession:
             data = response.json()
             
             movies = []
-            for movie in data.get("parts", [])[:max_movies]:
-                if movie.get("poster_path") and movie.get("title"):
-                    movies.append(self._format_movie(movie))
+            # Get all parts from the collection (TMDb collections can have many movies)
+            parts = data.get("parts", [])
             
+            # Filter and load movies (still prefer movies with posters, but include all if needed)
+            for movie in parts:
+                if movie.get("title"):  # Only require title, poster is optional
+                    formatted_movie = self._format_movie(movie)
+                    if formatted_movie:  # Make sure formatting succeeded
+                        movies.append(formatted_movie)
+                        
+                        # Stop when we reach max_movies (but don't cut off early)
+                        if len(movies) >= max_movies:
+                            break
+            
+            print(f"Loaded {len(movies)} movies from collection {collection_id} (total parts: {len(parts)})")
             return movies
         except Exception as e:
             print(f"Error loading from collection {collection_id}: {e}")
@@ -225,8 +236,12 @@ class MovieRankingSession:
         
         return movies
     
-    def _format_movie(self, movie: Dict) -> Dict:
+    def _format_movie(self, movie: Dict) -> Optional[Dict]:
         """Format a movie from TMDb API response"""
+        # Require at least an ID and title
+        if not movie.get("id") or not movie.get("title"):
+            return None
+            
         return {
             "id": movie["id"],
             "title": movie.get("title", ""),
