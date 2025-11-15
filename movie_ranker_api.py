@@ -192,6 +192,54 @@ class MovieRankingSession:
         
         return movies
     
+    def _load_from_keyword(self, keyword_id: int, max_movies: int = 100):
+        """Load movies from TMDb using keyword (best for MCU - ensures all have posters)"""
+        try:
+            url = f"{API_BASE}/discover/movie"
+            params = {
+                "api_key": API_KEY,
+                "with_keywords": keyword_id,
+                "sort_by": "release_date.asc",
+                "include_adult": False,
+                "language": "en-US"
+            }
+            
+            all_movies = []
+            page = 1
+            
+            # TMDb Discover can return multiple pages
+            while len(all_movies) < max_movies and page <= 5:
+                params["page"] = page
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                results = data.get("results", [])
+                if not results:
+                    break
+                
+                for movie in results:
+                    if movie.get("title"):  # Only require title
+                        formatted_movie = self._format_movie(movie)
+                        if formatted_movie:  # Make sure formatting succeeded
+                            all_movies.append(formatted_movie)
+                            
+                            # Stop when we reach max_movies
+                            if len(all_movies) >= max_movies:
+                                break
+                
+                # Check if there are more pages
+                total_pages = data.get("total_pages", 1)
+                if page >= total_pages:
+                    break
+                page += 1
+            
+            print(f"Loaded {len(all_movies)} movies from keyword {keyword_id}")
+            return all_movies
+        except Exception as e:
+            print(f"Error loading from keyword {keyword_id}: {e}")
+            return []
+    
     def _load_from_collection(self, collection_id: int, max_movies: int = 100):
         """Load movies from a TMDb collection"""
         try:
