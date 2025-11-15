@@ -543,7 +543,8 @@ def load_movies(session_id: str):
     data = request.get_json() or {}
     year = data.get('year')
     category = data.get('category')
-    max_movies = data.get('max_movies', 50)
+    # For categories, allow more movies by default (categories can be large like MCU with 30+ movies)
+    max_movies = data.get('max_movies', 100 if category else 50)
     
     if not year and not category:
         return jsonify({"error": "Must provide either 'year' or 'category'"}), 400
