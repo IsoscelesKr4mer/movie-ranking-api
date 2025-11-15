@@ -178,7 +178,7 @@ async function createSessionAndLoadMovies() {
         selectedMovieIds.clear();
         updateSelectedCount();
         
-        showMessage(`Loaded ${loadData.loaded_count} movies! Select the ones you've seen.`, 'success');
+        showMessage(`Loaded ${loadData.loaded_count} movies! Select the ones you have seen.`, 'success');
         showLoading(false);
 
     } catch (error) {
