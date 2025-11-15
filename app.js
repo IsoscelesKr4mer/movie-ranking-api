@@ -497,6 +497,8 @@ function reset() {
 }
 
 // Initialize
+console.log('Initializing Movie Ranking App...');
+console.log('API URL:', apiUrl);
 loadCategories();
 showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
 
@@ -507,12 +509,17 @@ async function loadCategories(retryCount = 0) {
         // Show loading message on first attempt or if retrying
         if (retryCount === 0) {
             movieCategorySelect.innerHTML = '<option value="">Loading categories...</option>';
+            console.log('Loading categories...');
         } else if (retryCount === 1) {
             movieCategorySelect.innerHTML = '<option value="">Waiting for Render to wake up (this may take 50+ seconds)...</option>';
             showMessage('Render free tier is spinning up. This may take 50+ seconds on the first request.', 'info');
+            console.log('Retrying category load - Render may be spinning up...');
         }
         
+        console.log(`Attempting to fetch categories (attempt ${retryCount + 1})...`);
         const data = await apiCall('/api/categories', 'GET', null, 90000); // 90 second timeout for cold start
+        console.log('Categories response:', data);
+        
         categories = data.categories || {};
         
         // Populate category dropdown
@@ -521,9 +528,11 @@ async function loadCategories(retryCount = 0) {
         if (Object.keys(categories).length === 0) {
             movieCategorySelect.innerHTML = '<option value="">No categories available</option>';
             showMessage('No categories found. The API may still be deploying.', 'info');
+            console.warn('No categories in response');
             return;
         }
         
+        console.log(`Loading ${Object.keys(categories).length} categories into dropdown`);
         for (const [id, info] of Object.entries(categories)) {
             const option = document.createElement('option');
             option.value = id;
@@ -531,23 +540,32 @@ async function loadCategories(retryCount = 0) {
             movieCategorySelect.appendChild(option);
         }
         
+        console.log('Categories loaded successfully!');
         if (retryCount > 0) {
             showMessage('Categories loaded successfully!', 'success');
         }
     } catch (error) {
         console.error('Failed to load categories:', error);
+        console.error('Error details:', {
+            message: error.message,
+            stack: error.stack,
+            retryCount: retryCount
+        });
         
         if (retryCount < maxRetries) {
             // Retry with exponential backoff (10s, 20s, 30s)
             const delay = (retryCount + 1) * 10000;
             movieCategorySelect.innerHTML = `<option value="">Retrying in ${delay / 1000} seconds... (Attempt ${retryCount + 1}/${maxRetries})</option>`;
+            console.log(`Scheduling retry in ${delay}ms`);
             
             setTimeout(() => {
+                console.log('Executing retry...');
                 loadCategories(retryCount + 1);
             }, delay);
         } else {
-            movieCategorySelect.innerHTML = '<option value="">Error loading categories - Please refresh the page</option>';
-            showMessage('Failed to load categories after multiple attempts. Render may be slow to wake up. Please refresh the page or wait a moment and try again.', 'error');
+            movieCategorySelect.innerHTML = '<option value="">Error loading categories - Check console for details</option>';
+            showMessage(`Failed to load categories after ${maxRetries} attempts. Error: ${error.message}. Check browser console (F12) for details.`, 'error');
+            console.error('Final failure - no more retries');
         }
     }
 }
