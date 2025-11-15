@@ -21,7 +21,8 @@ MOVIE_CATEGORIES = {
         "name": "Marvel Cinematic Universe",
         "description": "All MCU movies",
         "collection_id": 86311,  # Marvel Cinematic Universe Collection
-        "movie_ids": None  # Will fetch from collection
+        "keyword_id": 180547,  # MCU keyword for Discover endpoint (better for posters)
+        "movie_ids": None  # Will fetch from collection or keyword
     },
     "pixar": {
         "name": "Pixar Movies",
@@ -176,8 +177,12 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
-        # Try collection first if available
-        if cat_info.get("collection_id"):
+        # Try keyword-based discover first (best for MCU - gets all movies with posters)
+        if cat_info.get("keyword_id"):
+            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
+        
+        # Fall back to collection if keyword didn't work
+        if not movies and cat_info.get("collection_id"):
             movies = self._load_from_collection(cat_info["collection_id"], max_movies)
         
         # If no collection or movies not loaded, use curated movie IDs
