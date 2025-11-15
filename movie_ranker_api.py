@@ -40,6 +40,7 @@ class MovieRankingSession:
     def __init__(self, session_id: str):
         self.session_id = session_id
         self.movies: List[Dict] = []
+        self.selected_movies: List[Dict] = []  # Movies selected by user (ones they've seen)
         self.ranked_movies: List[Dict] = []
         self.unseen_movies: List[Dict] = []
         self.is_ranking = False
@@ -92,22 +93,41 @@ class MovieRankingSession:
             page += 1
         
         self.movies = all_movies[:max_movies]
+        # Reset selected movies when new movies are loaded
+        self.selected_movies = []
         return len(self.movies)
     
-    def start_ranking(self):
-        """Start the ranking process"""
+    def select_movies(self, movie_ids: List[int]):
+        """Select movies that the user has seen (by their TMDb IDs)"""
         if not self.movies:
             raise ValueError("No movies loaded")
         
-        if len(self.movies) < 2:
+        selected = []
+        for movie_id in movie_ids:
+            movie = next((m for m in self.movies if m.get("id") == movie_id), None)
+            if movie:
+                selected.append(movie)
+        
+        self.selected_movies = selected
+        return len(self.selected_movies)
+    
+    def start_ranking(self):
+        """Start the ranking process"""
+        # Use selected_movies if available, otherwise fall back to all movies
+        movies_to_rank = self.selected_movies if self.selected_movies else self.movies
+        
+        if not movies_to_rank:
+            raise ValueError("No movies selected or loaded")
+        
+        if len(movies_to_rank) < 2:
             raise ValueError("Need at least 2 movies to rank")
         
         self.is_ranking = True
         self.ranked_movies = []
         self.unseen_movies = []
         
-        # Filter out unseen movies
-        movies_to_rank = [m for m in self.movies if m not in self.unseen_movies]
+        # Filter out unseen movies (for skip functionality during ranking)
+        movies_to_rank = [m for m in movies_to_rank if m not in self.unseen_movies]
         
         # Initialize merge sort state
         self.merge_sort_state = {
@@ -310,6 +330,7 @@ def root():
             "health": "/api/health",
             "create_session": "/api/session/create",
             "load_movies": "/api/session/<session_id>/movies/load",
+            "select_movies": "/api/session/<session_id>/movies/select",
             "start_ranking": "/api/session/<session_id>/ranking/start",
             "get_current": "/api/session/<session_id>/ranking/current",
             "make_choice": "/api/session/<session_id>/ranking/choice",
@@ -365,6 +386,33 @@ def load_movies(session_id: str):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to load movies: {str(e)}"}), 500
+
+
+@app.route('/api/session/<session_id>/movies/select', methods=['POST'])
+def select_movies(session_id: str):
+    """Select movies that the user has seen"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    data = request.get_json() or {}
+    movie_ids = data.get('movie_ids', [])
+    
+    if not isinstance(movie_ids, list):
+        return jsonify({"error": "movie_ids must be a list"}), 400
+    
+    try:
+        session = sessions[session_id]
+        count = session.select_movies(movie_ids)
+        
+        return jsonify({
+            "message": f"Selected {count} movies",
+            "selected_count": count,
+            "selected_movies": session.selected_movies
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to select movies: {str(e)}"}), 500
 
 
 @app.route('/api/session/<session_id>/ranking/start', methods=['POST'])

@@ -37,6 +37,18 @@
             </div>
         </section>
 
+        <!-- Selection Section -->
+        <section id="selection-section" class="section hidden">
+            <h2>Select Movies You've Seen</h2>
+            <p class="selection-info">Click on the movies you've watched. Selected movies will be highlighted.</p>
+            <div id="selection-controls" class="controls">
+                <button id="select-all-btn" class="btn btn-info">Select All</button>
+                <button id="deselect-all-btn" class="btn btn-secondary">Deselect All</button>
+                <button id="confirm-selection-btn" class="btn btn-success">Start Ranking with Selected (<span id="selected-count">0</span>)</button>
+            </div>
+            <div id="movies-selection-grid" class="movies-grid"></div>
+        </section>
+
         <!-- Ranking Section -->
         <section id="ranking-section" class="section hidden">
             <h2>Ranking</h2>

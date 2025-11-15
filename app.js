@@ -2,6 +2,8 @@
 let apiUrl = 'https://movie-ranking-api-ea3e.onrender.com';
 let sessionId = null;
 let currentComparison = null;
+let loadedMovies = [];
+let selectedMovieIds = new Set();
 
 // DOM Elements
 const apiUrlInput = document.getElementById('api-url');
@@ -11,6 +13,12 @@ const createSessionBtn = document.getElementById('create-session-btn');
 const sessionInfo = document.getElementById('session-info');
 const sessionIdSpan = document.getElementById('session-id');
 const sessionStatusSpan = document.getElementById('session-status');
+const selectionSection = document.getElementById('selection-section');
+const moviesSelectionGrid = document.getElementById('movies-selection-grid');
+const selectAllBtn = document.getElementById('select-all-btn');
+const deselectAllBtn = document.getElementById('deselect-all-btn');
+const confirmSelectionBtn = document.getElementById('confirm-selection-btn');
+const selectedCountSpan = document.getElementById('selected-count');
 const rankingSection = document.getElementById('ranking-section');
 const comparisonContainer = document.getElementById('comparison-container');
 const loading = document.getElementById('loading');
@@ -28,6 +36,9 @@ apiUrlInput.addEventListener('change', (e) => {
 });
 
 createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
+selectAllBtn.addEventListener('click', selectAllMovies);
+deselectAllBtn.addEventListener('click', deselectAllMovies);
+confirmSelectionBtn.addEventListener('click', confirmSelection);
 startRankingBtn.addEventListener('click', startRanking);
 getStatusBtn.addEventListener('click', getStatus);
 getResultsBtn.addEventListener('click', getResults);
@@ -117,9 +128,16 @@ async function createSessionAndLoadMovies() {
             { year, max_movies: maxMovies }
         );
 
+        loadedMovies = loadData.movies || [];
         sessionStatusSpan.textContent = `Loaded ${loadData.loaded_count} movies`;
-        rankingSection.classList.remove('hidden');
-        showMessage(`Loaded ${loadData.loaded_count} movies!`, 'success');
+        
+        // Show selection section instead of going straight to ranking
+        selectionSection.classList.remove('hidden');
+        displayMoviesForSelection(loadedMovies);
+        selectedMovieIds.clear();
+        updateSelectedCount();
+        
+        showMessage(`Loaded ${loadData.loaded_count} movies! Select the ones you've seen.`, 'success');
         showLoading(false);
 
     } catch (error) {
@@ -128,9 +146,99 @@ async function createSessionAndLoadMovies() {
     }
 }
 
-async function startRanking() {
+function displayMoviesForSelection(movies) {
+    moviesSelectionGrid.innerHTML = '';
+    
+    movies.forEach(movie => {
+        const item = document.createElement('div');
+        item.className = 'movie-select-item';
+        item.dataset.movieId = movie.id;
+        
+        item.innerHTML = `
+            <div class="checkmark">✓</div>
+            <img src="${movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
+                 alt="${movie.title}"
+                 onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
+            <h5>${movie.title}</h5>
+            <p style="font-size: 0.8rem; color: #666;">${movie.release_date?.substring(0, 4) || 'N/A'}</p>
+        `;
+        
+        item.addEventListener('click', () => toggleMovieSelection(movie.id, item));
+        moviesSelectionGrid.appendChild(item);
+    });
+}
+
+function toggleMovieSelection(movieId, element) {
+    if (selectedMovieIds.has(movieId)) {
+        selectedMovieIds.delete(movieId);
+        element.classList.remove('selected');
+    } else {
+        selectedMovieIds.add(movieId);
+        element.classList.add('selected');
+    }
+    updateSelectedCount();
+}
+
+function selectAllMovies() {
+    selectedMovieIds.clear();
+    loadedMovies.forEach(movie => {
+        selectedMovieIds.add(movie.id);
+        const element = document.querySelector(`[data-movie-id="${movie.id}"]`);
+        if (element) element.classList.add('selected');
+    });
+    updateSelectedCount();
+}
+
+function deselectAllMovies() {
+    selectedMovieIds.clear();
+    document.querySelectorAll('.movie-select-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    selectedCountSpan.textContent = selectedMovieIds.size;
+}
+
+async function confirmSelection() {
     if (!sessionId) {
         showMessage('Please create a session first', 'error');
+        return;
+    }
+    
+    if (selectedMovieIds.size < 2) {
+        showMessage('Please select at least 2 movies you've seen', 'error');
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        const movieIdsArray = Array.from(selectedMovieIds);
+        
+        const data = await apiCall(
+            `/api/session/${sessionId}/movies/select`,
+            'POST',
+            { movie_ids: movieIdsArray }
+        );
+        
+        showMessage(`Selected ${data.selected_count} movies! Ready to rank.`, 'success');
+        
+        // Hide selection section and show ranking section
+        selectionSection.classList.add('hidden');
+        rankingSection.classList.remove('hidden');
+        
+        showLoading(false);
+        
+    } catch (error) {
+        showLoading(false);
+        console.error('Failed to confirm selection:', error);
+    }
+}
+
+async function startRanking() {
+    if (!sessionId) {
+        showMessage('Please create a session and select movies first', 'error');
         return;
     }
 
@@ -334,11 +442,16 @@ function reset() {
     if (confirm('Are you sure you want to reset? This will clear your current session.')) {
         sessionId = null;
         currentComparison = null;
+        loadedMovies = [];
+        selectedMovieIds.clear();
         sessionInfo.classList.add('hidden');
+        selectionSection.classList.add('hidden');
         rankingSection.classList.add('hidden');
         comparisonContainer.classList.add('hidden');
         resultsSection.classList.add('hidden');
         resultsContainer.innerHTML = '';
+        moviesSelectionGrid.innerHTML = '';
+        updateSelectedCount();
         showMessage('Session reset', 'info');
     }
 }
