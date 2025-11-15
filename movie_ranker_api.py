@@ -177,13 +177,22 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
-        # Try keyword-based discover first (best for MCU - gets all movies with posters)
-        if cat_info.get("keyword_id"):
+        # For MCU, try keyword first but limit results better
+        # For other categories, prefer collection (more curated)
+        if category == "marvel_mcu" and cat_info.get("keyword_id"):
             movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
+            # If keyword returned too many, fall back to collection
+            if len(movies) > 40:  # MCU should be ~30-37 movies max
+                print(f"Keyword returned {len(movies)} movies, using collection instead for better filtering")
+                movies = []
         
-        # Fall back to collection if keyword didn't work
+        # Try collection (most reliable for curated lists)
         if not movies and cat_info.get("collection_id"):
             movies = self._load_from_collection(cat_info["collection_id"], max_movies)
+        
+        # Fall back to keyword if collection didn't work (only for MCU)
+        if not movies and cat_info.get("keyword_id") and category == "marvel_mcu":
+            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
         
         # If no collection or movies not loaded, use curated movie IDs
         if not movies and cat_info.get("movie_ids"):
@@ -255,7 +264,14 @@ class MovieRankingSession:
             
             # Filter and load movies (still prefer movies with posters, but include all if needed)
             for movie in parts:
-                if movie.get("title"):  # Only require title, poster is optional
+                # Filter: only include actual theatrical movies (collections can include shorts/TV)
+                if movie.get("title") and movie.get("release_date"):
+                    # Skip very old or very new movies that might be shorts/documentaries
+                    # Or movies with very low popularity
+                    vote_count = movie.get("vote_count", 0)
+                    if vote_count < 20:  # Skip low-vote items
+                        continue
+                    
                     formatted_movie = self._format_movie(movie)
                     if formatted_movie:  # Make sure formatting succeeded
                         movies.append(formatted_movie)
