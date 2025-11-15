@@ -207,8 +207,8 @@ class MovieRankingSession:
         
         return movies
     
-    def _load_from_keyword(self, keyword_id: int, max_movies: int = 100):
-        """Load movies from TMDb using keyword (best for MCU - ensures all have posters)"""
+    def _load_from_keyword(self, keyword_id: int, max_movies: int = 100, company_id: int = None):
+        """Load movies from TMDb using keyword with proper filters for theatrical releases only"""
         try:
             url = f"{API_BASE}/discover/movie"
             params = {
