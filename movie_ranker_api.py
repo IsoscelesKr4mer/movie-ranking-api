@@ -267,29 +267,41 @@ class MovieRankingSession:
             movies = []
             # Get all parts from the collection (TMDb collections can have many movies)
             parts = data.get("parts", [])
+            print(f"Collection {collection_id} has {len(parts)} total parts")
             
             # Filter and load movies (still prefer movies with posters, but include all if needed)
             for movie in parts:
                 # Filter: only include actual theatrical movies (collections can include shorts/TV)
-                if movie.get("title") and movie.get("release_date"):
-                    # Skip very low vote items (likely shorts/documentaries/obscure releases)
-                    # But be less strict for collections (they're already curated)
-                    vote_count = movie.get("vote_count", 0)
-                    if vote_count < 10:  # Only skip items with very few votes (likely obscure)
-                        continue
+                if not movie.get("title"):
+                    continue
                     
-                    # Check media type - skip if it's a TV show (if available in data)
-                    media_type = movie.get("media_type")
-                    if media_type == "tv":  # Skip TV shows if present
+                # For collections, be lenient - they're already curated
+                # Only skip obvious non-movies (no release date might mean unreleased or TV)
+                if not movie.get("release_date"):
+                    # Skip items without release date (likely unreleased or TV)
+                    continue
+                
+                # Check media type - skip if it's a TV show (if available in data)
+                media_type = movie.get("media_type")
+                if media_type == "tv":  # Skip TV shows if present
+                    continue
+                
+                # For MCU collection specifically, be very lenient (all should be theatrical movies)
+                # Only skip if it has very few votes AND looks like a short/documentary
+                vote_count = movie.get("vote_count", 0)
+                if vote_count < 5:  # Only skip items with extremely few votes
+                    # Check if it's likely a short/documentary by title or other indicators
+                    title_lower = movie.get("title", "").lower()
+                    if any(word in title_lower for word in ["short", "documentary", "specials", "one-shot"]):
                         continue
+                
+                formatted_movie = self._format_movie(movie)
+                if formatted_movie:  # Make sure formatting succeeded
+                    movies.append(formatted_movie)
                     
-                    formatted_movie = self._format_movie(movie)
-                    if formatted_movie:  # Make sure formatting succeeded
-                        movies.append(formatted_movie)
-                        
-                        # Stop when we reach max_movies (but don't cut off early)
-                        if len(movies) >= max_movies:
-                            break
+                    # Stop when we reach max_movies (but don't cut off early)
+                    if len(movies) >= max_movies:
+                        break
             
             print(f"Loaded {len(movies)} movies from collection {collection_id} (total parts: {len(parts)})")
             return movies
