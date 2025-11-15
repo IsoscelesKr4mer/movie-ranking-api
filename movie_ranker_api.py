@@ -1,0 +1,488 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+import requests
+import os
+from typing import List, Dict, Optional
+import uuid
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+CORS(app)  # Enable CORS for frontend integration
+
+# Configuration
+API_BASE = "https://api.themoviedb.org/3"
+IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
+
+# Load API key from file
+def load_api_key():
+    try:
+        if os.path.exists("tmdb_api_key.txt"):
+            with open("tmdb_api_key.txt", "r") as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    return None
+
+API_KEY = load_api_key()
+
+# In-memory session storage (use Redis/database in production)
+sessions = {}
+
+class MovieRankingSession:
+    """Manages a single user's movie ranking session"""
+    
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.movies: List[Dict] = []
+        self.ranked_movies: List[Dict] = []
+        self.unseen_movies: List[Dict] = []
+        self.is_ranking = False
+        self.merge_sort_state = {
+            "sorted_sublists": [],
+            "current_merge": None,
+            "merge_stack": []
+        }
+        self.current_comparison: Optional[Dict] = None
+        self.created_at = datetime.now()
+    
+    def load_movies(self, year: int, max_movies: int = 50):
+        """Load movies from TMDb API"""
+        if not API_KEY:
+            raise ValueError("TMDb API key not configured")
+        
+        url = f"{API_BASE}/discover/movie"
+        params = {
+            "api_key": API_KEY,
+            "primary_release_year": year,
+            "sort_by": "popularity.desc",
+            "page": 1
+        }
+        
+        all_movies = []
+        page = 1
+        
+        while len(all_movies) < max_movies and page <= 5:
+            params["page"] = page
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            for movie in data.get("results", []):
+                if movie.get("poster_path") and movie.get("title"):
+                    all_movies.append({
+                        "id": movie["id"],
+                        "title": movie["title"],
+                        "poster_path": movie.get("poster_path", ""),
+                        "poster_url": f"{IMAGE_BASE}{movie.get('poster_path', '')}",
+                        "release_date": movie.get("release_date", ""),
+                        "vote_average": movie.get("vote_average", 0),
+                        "overview": movie.get("overview", "")[:200] + "..." if movie.get("overview") else ""
+                    })
+                    if len(all_movies) >= max_movies:
+                        break
+            
+            if not data.get("results"):
+                break
+            page += 1
+        
+        self.movies = all_movies[:max_movies]
+        return len(self.movies)
+    
+    def start_ranking(self):
+        """Start the ranking process"""
+        if not self.movies:
+            raise ValueError("No movies loaded")
+        
+        if len(self.movies) < 2:
+            raise ValueError("Need at least 2 movies to rank")
+        
+        self.is_ranking = True
+        self.ranked_movies = []
+        self.unseen_movies = []
+        
+        # Filter out unseen movies
+        movies_to_rank = [m for m in self.movies if m not in self.unseen_movies]
+        
+        # Initialize merge sort state
+        self.merge_sort_state = {
+            "sorted_sublists": [[m] for m in movies_to_rank],
+            "current_merge": None,
+            "merge_stack": []
+        }
+        
+        # Build initial merge stack
+        self._prepare_merge_round()
+        
+        # Start first comparison
+        self.next_comparison()
+    
+    def _prepare_merge_round(self):
+        """Prepare the next round of merges"""
+        sublists = self.merge_sort_state["sorted_sublists"]
+        
+        if len(sublists) <= 1:
+            if sublists:
+                self.ranked_movies = sublists[0]
+            return
+        
+        new_sublists = []
+        i = 0
+        while i < len(sublists):
+            if i + 1 < len(sublists):
+                # Pair up two sublists
+                self.merge_sort_state["merge_stack"].append({
+                    "left": sublists[i],
+                    "right": sublists[i + 1],
+                    "left_idx": 0,
+                    "right_idx": 0,
+                    "result": []
+                })
+                i += 2
+            else:
+                # Odd one out, add to next round
+                new_sublists.append(sublists[i])
+                i += 1
+        
+        self.merge_sort_state["sorted_sublists"] = new_sublists
+    
+    def next_comparison(self):
+        """Get the next comparison to make"""
+        if not self.is_ranking:
+            return None
+        
+        # Check if we have an active merge
+        if self.merge_sort_state["current_merge"]:
+            merge = self.merge_sort_state["current_merge"]
+            left_list = merge["left"]
+            right_list = merge["right"]
+            left_idx = merge["left_idx"]
+            right_idx = merge["right_idx"]
+            
+            # Check if merge is complete
+            if left_idx >= len(left_list) and right_idx >= len(right_list):
+                self.merge_sort_state["current_merge"] = None
+                return self.next_comparison()
+            elif left_idx >= len(left_list):
+                # Left exhausted, add remaining right (filter unseen)
+                remaining = [m for m in right_list[right_idx:] if m not in self.unseen_movies]
+                merge["result"].extend(remaining)
+                self._complete_current_merge()
+                return self.next_comparison()
+            elif right_idx >= len(right_list):
+                # Right exhausted, add remaining left (filter unseen)
+                remaining = [m for m in left_list[left_idx:] if m not in self.unseen_movies]
+                merge["result"].extend(remaining)
+                self._complete_current_merge()
+                return self.next_comparison()
+            else:
+                # Need to compare - skip if movies are already unseen
+                left_movie = left_list[left_idx]
+                right_movie = right_list[right_idx]
+                
+                # Skip if either movie is already marked as unseen
+                if left_movie in self.unseen_movies:
+                    merge["left_idx"] += 1
+                    return self.next_comparison()
+                if right_movie in self.unseen_movies:
+                    merge["right_idx"] += 1
+                    return self.next_comparison()
+                
+                self.current_comparison = {
+                    "left_movie": left_movie,
+                    "right_movie": right_movie,
+                    "merge": merge
+                }
+                return {
+                    "left_movie": left_movie,
+                    "right_movie": right_movie
+                }
+        
+        # No active merge, get next from stack
+        if self.merge_sort_state["merge_stack"]:
+            merge = self.merge_sort_state["merge_stack"].pop(0)
+            self.merge_sort_state["current_merge"] = merge
+            return self.next_comparison()
+        else:
+            # Current round done, prepare next round
+            if len(self.merge_sort_state["sorted_sublists"]) > 1:
+                self._prepare_merge_round()
+                return self.next_comparison()
+            else:
+                # All done!
+                if self.merge_sort_state["sorted_sublists"]:
+                    self.ranked_movies = self.merge_sort_state["sorted_sublists"][0]
+                self.finish_ranking()
+                return None
+    
+    def _complete_current_merge(self):
+        """Complete the current merge and add result to sorted_sublists"""
+        merge = self.merge_sort_state["current_merge"]
+        self.merge_sort_state["sorted_sublists"].append(merge["result"])
+        self.merge_sort_state["current_merge"] = None
+    
+    def make_choice(self, choice: str):
+        """Handle user's choice: 'left', 'right', or 'skip'"""
+        if not self.current_comparison:
+            raise ValueError("No active comparison")
+        
+        left_movie = self.current_comparison["left_movie"]
+        right_movie = self.current_comparison["right_movie"]
+        merge = self.current_comparison["merge"]
+        
+        if choice == "skip":
+            # User hasn't seen one or both movies
+            if left_movie not in self.unseen_movies:
+                self.unseen_movies.append(left_movie)
+            if right_movie not in self.unseen_movies:
+                self.unseen_movies.append(right_movie)
+            
+            merge["left_idx"] += 1
+            merge["right_idx"] += 1
+            
+        elif choice == "left":
+            # Prefer left movie
+            if left_movie not in self.unseen_movies:
+                merge["result"].append(left_movie)
+            merge["left_idx"] += 1
+            
+        elif choice == "right":
+            # Prefer right movie
+            if right_movie not in self.unseen_movies:
+                merge["result"].append(right_movie)
+            merge["right_idx"] += 1
+        else:
+            raise ValueError(f"Invalid choice: {choice}. Must be 'left', 'right', or 'skip'")
+        
+        # Get next comparison
+        return self.next_comparison()
+    
+    def finish_ranking(self):
+        """Finish the ranking process"""
+        self.is_ranking = False
+        self.current_comparison = None
+        
+        # Filter out unseen movies from final ranking
+        self.ranked_movies = [m for m in self.ranked_movies if m not in self.unseen_movies]
+        
+        # Ensure all seen movies are in ranked list
+        for movie in self.movies:
+            if movie not in self.ranked_movies and movie not in self.unseen_movies:
+                self.ranked_movies.append(movie)
+    
+    def get_status(self):
+        """Get current ranking status"""
+        total_movies = len(self.movies)
+        ranked_count = len(self.ranked_movies)
+        
+        return {
+            "is_ranking": self.is_ranking,
+            "total_movies": total_movies,
+            "ranked_count": ranked_count,
+            "unseen_count": len(self.unseen_movies),
+            "has_comparison": self.current_comparison is not None
+        }
+    
+    def get_results(self):
+        """Get final ranking results"""
+        return {
+            "ranked_movies": self.ranked_movies,
+            "unseen_movies": self.unseen_movies,
+            "total_ranked": len(self.ranked_movies)
+        }
+
+
+# API Endpoints
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        "status": "healthy",
+        "api_key_configured": API_KEY is not None
+    }), 200
+
+
+@app.route('/api/session/create', methods=['POST'])
+def create_session():
+    """Create a new ranking session"""
+    session_id = str(uuid.uuid4())
+    sessions[session_id] = MovieRankingSession(session_id)
+    
+    return jsonify({
+        "session_id": session_id,
+        "message": "Session created"
+    }), 201
+
+
+@app.route('/api/session/<session_id>/movies/load', methods=['POST'])
+def load_movies(session_id: str):
+    """Load movies for a session"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    data = request.get_json() or {}
+    year = data.get('year', 2025)
+    max_movies = data.get('max_movies', 50)
+    
+    try:
+        session = sessions[session_id]
+        count = session.load_movies(year, max_movies)
+        
+        return jsonify({
+            "message": f"Loaded {count} movies",
+            "movie_count": count,
+            "movies": session.movies
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to load movies: {str(e)}"}), 500
+
+
+@app.route('/api/session/<session_id>/ranking/start', methods=['POST'])
+def start_ranking(session_id: str):
+    """Start the ranking process"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    try:
+        session = sessions[session_id]
+        session.start_ranking()
+        
+        # Get first comparison
+        comparison = session.next_comparison()
+        
+        if comparison:
+            return jsonify({
+                "message": "Ranking started",
+                "comparison": comparison,
+                "status": session.get_status()
+            }), 200
+        else:
+            return jsonify({
+                "message": "Ranking complete (no comparisons needed)",
+                "results": session.get_results()
+            }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to start ranking: {str(e)}"}), 500
+
+
+@app.route('/api/session/<session_id>/ranking/current', methods=['GET'])
+def get_current_comparison(session_id: str):
+    """Get the current comparison"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    session = sessions[session_id]
+    
+    if not session.is_ranking:
+        return jsonify({
+            "error": "Ranking not in progress",
+            "status": session.get_status()
+        }), 400
+    
+    if session.current_comparison:
+        return jsonify({
+            "comparison": {
+                "left_movie": session.current_comparison["left_movie"],
+                "right_movie": session.current_comparison["right_movie"]
+            },
+            "status": session.get_status()
+        }), 200
+    else:
+        # Try to get next comparison
+        comparison = session.next_comparison()
+        if comparison:
+            return jsonify({
+                "comparison": comparison,
+                "status": session.get_status()
+            }), 200
+        else:
+            return jsonify({
+                "message": "No more comparisons",
+                "results": session.get_results()
+            }), 200
+
+
+@app.route('/api/session/<session_id>/ranking/choice', methods=['POST'])
+def make_choice(session_id: str):
+    """Make a choice in the ranking"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    data = request.get_json()
+    if not data or 'choice' not in data:
+        return jsonify({"error": "Missing 'choice' field"}), 400
+    
+    choice = data['choice'].lower()
+    if choice not in ['left', 'right', 'skip']:
+        return jsonify({"error": "Choice must be 'left', 'right', or 'skip'"}), 400
+    
+    try:
+        session = sessions[session_id]
+        comparison = session.make_choice(choice)
+        
+        if comparison:
+            return jsonify({
+                "message": "Choice recorded",
+                "comparison": comparison,
+                "status": session.get_status()
+            }), 200
+        else:
+            # Ranking complete
+            return jsonify({
+                "message": "Ranking complete",
+                "results": session.get_results(),
+                "status": session.get_status()
+            }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to process choice: {str(e)}"}), 500
+
+
+@app.route('/api/session/<session_id>/ranking/status', methods=['GET'])
+def get_status(session_id: str):
+    """Get ranking status"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    session = sessions[session_id]
+    return jsonify({
+        "status": session.get_status(),
+        "has_results": len(session.ranked_movies) > 0
+    }), 200
+
+
+@app.route('/api/session/<session_id>/ranking/results', methods=['GET'])
+def get_results(session_id: str):
+    """Get final ranking results"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    session = sessions[session_id]
+    return jsonify(session.get_results()), 200
+
+
+@app.route('/api/session/<session_id>', methods=['DELETE'])
+def delete_session(session_id: str):
+    """Delete a session"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    del sessions[session_id]
+    return jsonify({"message": "Session deleted"}), 200
+
+
+if __name__ == '__main__':
+    # Clean up old sessions on startup (older than 24 hours)
+    print("Starting Movie Ranking API...")
+    if not API_KEY:
+        print("WARNING: TMDb API key not found. Please create tmdb_api_key.txt with your API key.")
+    else:
+        print("TMDb API key loaded successfully.")
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
+

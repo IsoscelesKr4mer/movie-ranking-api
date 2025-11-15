@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# API Keys and Secrets (IMPORTANT - DO NOT COMMIT)
+tmdb_api_key.txt
+*.key
+*.secret
+.env
+.env.local
+
+# Logs
+*.log
+lootable_bot.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Project specific
+movie_ranking_*.txt
+movie_ranking_*.json
+plots.json
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
