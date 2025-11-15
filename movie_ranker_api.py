@@ -13,8 +13,14 @@ CORS(app)  # Enable CORS for frontend integration
 API_BASE = "https://api.themoviedb.org/3"
 IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
-# Load API key from file
+# Load API key from file or environment variable
 def load_api_key():
+    # First check environment variable (for deployment)
+    api_key = os.getenv("TMDB_API_KEY")
+    if api_key:
+        return api_key
+    
+    # Fall back to file (for local development)
     try:
         if os.path.exists("tmdb_api_key.txt"):
             with open("tmdb_api_key.txt", "r") as f:
@@ -480,9 +486,12 @@ if __name__ == '__main__':
     # Clean up old sessions on startup (older than 24 hours)
     print("Starting Movie Ranking API...")
     if not API_KEY:
-        print("WARNING: TMDb API key not found. Please create tmdb_api_key.txt with your API key.")
+        print("WARNING: TMDb API key not found. Please set TMDB_API_KEY environment variable or create tmdb_api_key.txt with your API key.")
     else:
         print("TMDb API key loaded successfully.")
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Get port from environment variable (for deployment) or use 5000
+    port = int(os.getenv("PORT", 5000))
+    debug = os.getenv("FLASK_ENV") == "development"
+    app.run(debug=debug, host='0.0.0.0', port=port)
 
