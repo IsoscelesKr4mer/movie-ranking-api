@@ -225,6 +225,10 @@ class MovieRankingSession:
                 "include_video": False  # Exclude direct-to-video format (not about streaming platforms)
             }
             
+            # Add company filter if provided (e.g., for Pixar - company ID 3)
+            if company_id:
+                params["with_companies"] = company_id
+            
             all_movies = []
             page = 1
             
