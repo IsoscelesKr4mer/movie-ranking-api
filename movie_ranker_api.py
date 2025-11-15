@@ -28,7 +28,9 @@ MOVIE_CATEGORIES = {
         "name": "Pixar Movies",
         "description": "All Pixar animated films",
         "collection_id": None,
-        "movie_ids": [862, 863, 10193, 301528, 12, 127380, 49026, 260513, 14160, 508439, 508442, 585083, 508947]
+        "keyword_id": 12360,  # Pixar keyword for Discover endpoint
+        "company_id": 3,  # Pixar Animation Studios company ID (for discover)
+        "movie_ids": None  # Will fetch from keyword/company
     },
     "star_wars": {
         "name": "Star Wars Movies",
@@ -177,22 +179,26 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
-        # For MCU, prefer keyword with proper filters (ensures only theatrical releases)
+        # For MCU and Pixar, prefer keyword with proper filters (ensures only theatrical releases)
         # For other categories, prefer collection (more reliable and curated)
-        if category == "marvel_mcu" and cat_info.get("keyword_id"):
-            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
+        if category in ["marvel_mcu", "pixar"] and cat_info.get("keyword_id"):
+            company_id = cat_info.get("company_id")
+            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
             # If keyword didn't return enough, fall back to collection
-            if len(movies) < 20:  # MCU should have ~30+ movies
+            if category == "marvel_mcu" and len(movies) < 20:  # MCU should have ~30+ movies
                 print(f"Keyword returned only {len(movies)} movies, trying collection...")
                 movies = []
+            elif category == "pixar" and len(movies) < 20:  # Pixar should have ~29 movies
+                print(f"Keyword returned only {len(movies)} Pixar movies, may need collection or different approach")
         
-        # Try collection (most reliable for curated lists, or as fallback for MCU)
+        # Try collection (most reliable for curated lists, or as fallback)
         if not movies and cat_info.get("collection_id"):
             movies = self._load_from_collection(cat_info["collection_id"], max_movies)
         
         # Fall back to keyword only if collection didn't work (for categories with keywords)
         if not movies and cat_info.get("keyword_id"):
-            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
+            company_id = cat_info.get("company_id")
+            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
         
         # If no collection or movies not loaded, use curated movie IDs
         if not movies and cat_info.get("movie_ids"):
