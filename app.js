@@ -180,7 +180,6 @@ function toggleMovieSelection(movieId, element) {
 }
 
 function selectAllMovies() {
-    selectedMovieIds.clear();
     loadedMovies.forEach(movie => {
         selectedMovieIds.add(movie.id);
         const element = document.querySelector(`[data-movie-id="${movie.id}"]`);
