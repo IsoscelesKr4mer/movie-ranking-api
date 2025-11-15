@@ -248,7 +248,7 @@ async function confirmSelection() {
     }
     
     if (selectedMovieIds.size < 2) {
-        showMessage('Please select at least 2 movies you've seen', 'error');
+        showMessage("Please select at least 2 movies you've seen", 'error');
         return;
     }
     
