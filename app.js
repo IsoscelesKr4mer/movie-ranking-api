@@ -80,7 +80,7 @@ function showLoading(show = true) {
     }
 }
 
-async function apiCall(endpoint, method = 'GET', body = null) {
+async function apiCall(endpoint, method = 'GET', body = null, timeout = 90000) {
     const url = `${apiUrl}${endpoint}`;
     const options = {
         method,
@@ -94,7 +94,17 @@ async function apiCall(endpoint, method = 'GET', body = null) {
     }
 
     try {
-        const response = await fetch(url, options);
+        // Create a timeout promise for Render's cold start (up to 90 seconds)
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Request timeout - Render may be spinning up. Please wait...')), timeout);
+        });
+
+        // Race between fetch and timeout
+        const response = await Promise.race([
+            fetch(url, options),
+            timeoutPromise
+        ]);
+
         const data = await response.json();
 
         if (!response.ok) {
@@ -104,6 +114,12 @@ async function apiCall(endpoint, method = 'GET', body = null) {
         return data;
     } catch (error) {
         console.error('API Error:', error);
+        
+        // Don't show error message for timeout on category loading (it will retry)
+        if (endpoint === '/api/categories' && error.message.includes('timeout')) {
+            throw error; // Let loadCategories handle the retry
+        }
+        
         showMessage(`Error: ${error.message}`, 'error');
         throw error;
     }
@@ -484,9 +500,19 @@ function reset() {
 loadCategories();
 showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
 
-async function loadCategories() {
+async function loadCategories(retryCount = 0) {
+    const maxRetries = 3;
+    
     try {
-        const data = await apiCall('/api/categories', 'GET');
+        // Show loading message on first attempt or if retrying
+        if (retryCount === 0) {
+            movieCategorySelect.innerHTML = '<option value="">Loading categories...</option>';
+        } else if (retryCount === 1) {
+            movieCategorySelect.innerHTML = '<option value="">Waiting for Render to wake up (this may take 50+ seconds)...</option>';
+            showMessage('Render free tier is spinning up. This may take 50+ seconds on the first request.', 'info');
+        }
+        
+        const data = await apiCall('/api/categories', 'GET', null, 90000); // 90 second timeout for cold start
         categories = data.categories || {};
         
         // Populate category dropdown
@@ -504,15 +530,25 @@ async function loadCategories() {
             option.textContent = `${info.name} - ${info.description}`;
             movieCategorySelect.appendChild(option);
         }
+        
+        if (retryCount > 0) {
+            showMessage('Categories loaded successfully!', 'success');
+        }
     } catch (error) {
         console.error('Failed to load categories:', error);
-        movieCategorySelect.innerHTML = '<option value="">Error loading categories (try refreshing)</option>';
-        showMessage('Failed to load categories. The API endpoint may not be deployed yet. Try refreshing the page.', 'error');
         
-        // Try again after a delay
-        setTimeout(() => {
-            loadCategories();
-        }, 5000);
+        if (retryCount < maxRetries) {
+            // Retry with exponential backoff (10s, 20s, 30s)
+            const delay = (retryCount + 1) * 10000;
+            movieCategorySelect.innerHTML = `<option value="">Retrying in ${delay / 1000} seconds... (Attempt ${retryCount + 1}/${maxRetries})</option>`;
+            
+            setTimeout(() => {
+                loadCategories(retryCount + 1);
+            }, delay);
+        } else {
+            movieCategorySelect.innerHTML = '<option value="">Error loading categories - Please refresh the page</option>';
+            showMessage('Failed to load categories after multiple attempts. Render may be slow to wake up. Please refresh the page or wait a moment and try again.', 'error');
+        }
     }
 }
 
