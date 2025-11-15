@@ -177,21 +177,13 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
-        # For MCU, try keyword first but limit results better
-        # For other categories, prefer collection (more curated)
-        if category == "marvel_mcu" and cat_info.get("keyword_id"):
-            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
-            # If keyword returned too many, fall back to collection
-            if len(movies) > 40:  # MCU should be ~30-37 movies max
-                print(f"Keyword returned {len(movies)} movies, using collection instead for better filtering")
-                movies = []
-        
-        # Try collection (most reliable for curated lists)
-        if not movies and cat_info.get("collection_id"):
+        # Prefer collection for all categories (most reliable and curated)
+        # Only use keyword as fallback if collection doesn't work
+        if cat_info.get("collection_id"):
             movies = self._load_from_collection(cat_info["collection_id"], max_movies)
         
-        # Fall back to keyword if collection didn't work (only for MCU)
-        if not movies and cat_info.get("keyword_id") and category == "marvel_mcu":
+        # Fall back to keyword only if collection didn't work (and keyword exists)
+        if not movies and cat_info.get("keyword_id"):
             movies = self._load_from_keyword(cat_info["keyword_id"], max_movies)
         
         # If no collection or movies not loaded, use curated movie IDs
@@ -228,14 +220,28 @@ class MovieRankingSession:
                     break
                 
                 for movie in results:
-                    if movie.get("title"):  # Only require title
-                        formatted_movie = self._format_movie(movie)
-                        if formatted_movie:  # Make sure formatting succeeded
-                            all_movies.append(formatted_movie)
-                            
-                            # Stop when we reach max_movies
-                            if len(all_movies) >= max_movies:
-                                break
+                    # Strict filtering: only theatrical movies with proper releases
+                    if not movie.get("title") or not movie.get("release_date"):
+                        continue
+                    
+                    # Filter out low-vote items (shorts, obscure releases, TV movies)
+                    vote_count = movie.get("vote_count", 0)
+                    if vote_count < 100:  # Require at least 100 votes (real theatrical releases)
+                        continue
+                    
+                    # Exclude documentaries and certain genres
+                    genre_ids = movie.get("genre_ids", [])
+                    # 99 = Documentary, 10402 = TV Movie
+                    if 99 in genre_ids or 10402 in genre_ids:
+                        continue
+                    
+                    formatted_movie = self._format_movie(movie)
+                    if formatted_movie:  # Make sure formatting succeeded
+                        all_movies.append(formatted_movie)
+                        
+                        # Stop when we reach max_movies
+                        if len(all_movies) >= max_movies:
+                            break
                 
                 # Check if there are more pages
                 total_pages = data.get("total_pages", 1)
