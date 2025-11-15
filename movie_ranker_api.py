@@ -240,7 +240,11 @@ class MovieRankingSession:
                     
                     # Exclude known TV specials by title (Disney+ specials that slip through)
                     title_lower = movie.get("title", "").lower()
-                    if any(keyword in title_lower for keyword in ["special", "holiday special", "werewolf by night"]):
+                    special_keywords = [
+                        "holiday special",  # The Guardians of the Galaxy Holiday Special
+                        "werewolf by night"  # Werewolf by Night (2022 Disney+ special)
+                    ]
+                    if any(keyword in title_lower for keyword in special_keywords):
                         continue
                     
                     # Additional runtime check - feature films are typically 70+ minutes
