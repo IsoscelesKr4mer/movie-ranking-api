@@ -13,6 +13,77 @@ CORS(app)  # Enable CORS for frontend integration
 API_BASE = "https://api.themoviedb.org/3"
 IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
 
+# Curated Movie Categories
+# Categories use either TMDb collection IDs or curated movie ID lists
+MOVIE_CATEGORIES = {
+    "marvel_mcu": {
+        "name": "Marvel Cinematic Universe",
+        "description": "All MCU movies",
+        "collection_id": 86311,  # Marvel Cinematic Universe Collection
+        "movie_ids": None  # Will fetch from collection
+    },
+    "pixar": {
+        "name": "Pixar Movies",
+        "description": "All Pixar animated films",
+        "collection_id": None,
+        "movie_ids": [862, 863, 10193, 301528, 12, 127380, 49026, 260513, 14160, 508439, 508442, 585083, 508947]
+    },
+    "star_wars": {
+        "name": "Star Wars Movies",
+        "description": "All Star Wars films",
+        "collection_id": 10,  # Star Wars Collection
+        "movie_ids": None
+    },
+    "harry_potter": {
+        "name": "Harry Potter Series",
+        "description": "All Harry Potter films",
+        "collection_id": 1241,  # Harry Potter Collection
+        "movie_ids": None
+    },
+    "fast_furious": {
+        "name": "Fast & Furious",
+        "description": "The Fast and the Furious franchise",
+        "collection_id": 9485,  # Fast & Furious Collection
+        "movie_ids": None
+    },
+    "james_bond": {
+        "name": "James Bond Films",
+        "description": "James Bond movies",
+        "collection_id": 645,  # James Bond Collection
+        "movie_ids": None
+    },
+    "lord_of_the_rings": {
+        "name": "Lord of the Rings & The Hobbit",
+        "description": "LOTR and Hobbit trilogies",
+        "collection_id": 119,  # Lord of the Rings Collection
+        "movie_ids": None
+    },
+    "mission_impossible": {
+        "name": "Mission: Impossible",
+        "description": "Mission: Impossible franchise",
+        "collection_id": 87359,  # Mission: Impossible Collection
+        "movie_ids": None
+    },
+    "batman_christopher_nolan": {
+        "name": "Christopher Nolan's Batman Trilogy",
+        "description": "The Dark Knight trilogy",
+        "collection_id": None,
+        "movie_ids": [272, 155, 49026]  # Batman Begins, The Dark Knight, The Dark Knight Rises (49026 corrected)
+    },
+    "matrix": {
+        "name": "The Matrix",
+        "description": "The Matrix franchise",
+        "collection_id": 469,  # The Matrix Collection
+        "movie_ids": None
+    },
+    "xmen": {
+        "name": "X-Men Films",
+        "description": "X-Men movie franchise",
+        "collection_id": 263,  # X-Men Collection
+        "movie_ids": None
+    }
+}
+
 # Load API key from file or environment variable
 def load_api_key():
     # First check environment variable (for deployment)
@@ -52,50 +123,118 @@ class MovieRankingSession:
         self.current_comparison: Optional[Dict] = None
         self.created_at = datetime.now()
     
-    def load_movies(self, year: int, max_movies: int = 50):
-        """Load movies from TMDb API"""
+    def load_movies(self, year: int = None, max_movies: int = 50, category: str = None):
+        """Load movies from TMDb API by year or category"""
         if not API_KEY:
             raise ValueError("TMDb API key not configured")
         
-        url = f"{API_BASE}/discover/movie"
-        params = {
-            "api_key": API_KEY,
-            "primary_release_year": year,
-            "sort_by": "popularity.desc",
-            "page": 1
-        }
-        
         all_movies = []
-        page = 1
         
-        while len(all_movies) < max_movies and page <= 5:
-            params["page"] = page
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
+        if category:
+            # Load from category
+            all_movies = self._load_movies_from_category(category, max_movies)
+        elif year:
+            # Load from year (original functionality)
+            url = f"{API_BASE}/discover/movie"
+            params = {
+                "api_key": API_KEY,
+                "primary_release_year": year,
+                "sort_by": "popularity.desc",
+                "page": 1
+            }
             
-            for movie in data.get("results", []):
-                if movie.get("poster_path") and movie.get("title"):
-                    all_movies.append({
-                        "id": movie["id"],
-                        "title": movie["title"],
-                        "poster_path": movie.get("poster_path", ""),
-                        "poster_url": f"{IMAGE_BASE}{movie.get('poster_path', '')}",
-                        "release_date": movie.get("release_date", ""),
-                        "vote_average": movie.get("vote_average", 0),
-                        "overview": movie.get("overview", "")[:200] + "..." if movie.get("overview") else ""
-                    })
-                    if len(all_movies) >= max_movies:
-                        break
-            
-            if not data.get("results"):
-                break
-            page += 1
+            page = 1
+            while len(all_movies) < max_movies and page <= 5:
+                params["page"] = page
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                for movie in data.get("results", []):
+                    if movie.get("poster_path") and movie.get("title"):
+                        all_movies.append(self._format_movie(movie))
+                        if len(all_movies) >= max_movies:
+                            break
+                
+                if not data.get("results"):
+                    break
+                page += 1
+        else:
+            raise ValueError("Must provide either year or category")
         
         self.movies = all_movies[:max_movies]
         # Reset selected movies when new movies are loaded
         self.selected_movies = []
         return len(self.movies)
+    
+    def _load_movies_from_category(self, category: str, max_movies: int = 50):
+        """Load movies from a curated category"""
+        if category not in MOVIE_CATEGORIES:
+            raise ValueError(f"Unknown category: {category}")
+        
+        cat_info = MOVIE_CATEGORIES[category]
+        movies = []
+        
+        # Try collection first if available
+        if cat_info.get("collection_id"):
+            movies = self._load_from_collection(cat_info["collection_id"], max_movies)
+        
+        # If no collection or movies not loaded, use curated movie IDs
+        if not movies and cat_info.get("movie_ids"):
+            movie_ids = cat_info["movie_ids"][:max_movies]
+            movies = self._load_movies_by_ids(movie_ids)
+        
+        return movies
+    
+    def _load_from_collection(self, collection_id: int, max_movies: int = 50):
+        """Load movies from a TMDb collection"""
+        try:
+            url = f"{API_BASE}/collection/{collection_id}"
+            params = {"api_key": API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            movies = []
+            for movie in data.get("parts", [])[:max_movies]:
+                if movie.get("poster_path") and movie.get("title"):
+                    movies.append(self._format_movie(movie))
+            
+            return movies
+        except Exception as e:
+            print(f"Error loading from collection {collection_id}: {e}")
+            return []
+    
+    def _load_movies_by_ids(self, movie_ids: List[int]):
+        """Load movies by their TMDb IDs"""
+        movies = []
+        for movie_id in movie_ids:
+            try:
+                url = f"{API_BASE}/movie/{movie_id}"
+                params = {"api_key": API_KEY}
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                movie = response.json()
+                
+                if movie.get("poster_path") and movie.get("title"):
+                    movies.append(self._format_movie(movie))
+            except Exception as e:
+                print(f"Error loading movie {movie_id}: {e}")
+                continue
+        
+        return movies
+    
+    def _format_movie(self, movie: Dict) -> Dict:
+        """Format a movie from TMDb API response"""
+        return {
+            "id": movie["id"],
+            "title": movie.get("title", ""),
+            "poster_path": movie.get("poster_path", ""),
+            "poster_url": f"{IMAGE_BASE}{movie.get('poster_path', '')}" if movie.get("poster_path") else "",
+            "release_date": movie.get("release_date", ""),
+            "vote_average": movie.get("vote_average", 0),
+            "overview": (movie.get("overview", "")[:200] + "...") if movie.get("overview") else ""
+        }
     
     def select_movies(self, movie_ids: List[int]):
         """Select movies that the user has seen (by their TMDb IDs)"""
@@ -326,18 +465,19 @@ def root():
         "name": "Movie Ranking API",
         "version": "1.0.0",
         "description": "REST API for ranking movies using merge sort algorithm",
-        "endpoints": {
-            "health": "/api/health",
-            "create_session": "/api/session/create",
-            "load_movies": "/api/session/<session_id>/movies/load",
-            "select_movies": "/api/session/<session_id>/movies/select",
-            "start_ranking": "/api/session/<session_id>/ranking/start",
-            "get_current": "/api/session/<session_id>/ranking/current",
-            "make_choice": "/api/session/<session_id>/ranking/choice",
-            "get_status": "/api/session/<session_id>/ranking/status",
-            "get_results": "/api/session/<session_id>/ranking/results",
-            "delete_session": "/api/session/<session_id>"
-        },
+            "endpoints": {
+                "health": "/api/health",
+                "categories": "/api/categories",
+                "create_session": "/api/session/create",
+                "load_movies": "/api/session/<session_id>/movies/load",
+                "select_movies": "/api/session/<session_id>/movies/select",
+                "start_ranking": "/api/session/<session_id>/ranking/start",
+                "get_current": "/api/session/<session_id>/ranking/current",
+                "make_choice": "/api/session/<session_id>/ranking/choice",
+                "get_status": "/api/session/<session_id>/ranking/status",
+                "get_results": "/api/session/<session_id>/ranking/results",
+                "delete_session": "/api/session/<session_id>"
+            },
         "documentation": "See README_API.md for detailed API documentation",
         "github": "https://github.com/IsoscelesKr4mer/movie-ranking-api"
     }), 200
@@ -363,23 +503,43 @@ def create_session():
     }), 201
 
 
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    """Get list of available movie categories"""
+    categories = {}
+    for cat_id, cat_info in MOVIE_CATEGORIES.items():
+        categories[cat_id] = {
+            "name": cat_info["name"],
+            "description": cat_info["description"]
+        }
+    
+    return jsonify({
+        "categories": categories
+    }), 200
+
+
 @app.route('/api/session/<session_id>/movies/load', methods=['POST'])
 def load_movies(session_id: str):
-    """Load movies for a session"""
+    """Load movies for a session by year or category"""
     if session_id not in sessions:
         return jsonify({"error": "Session not found"}), 404
     
     data = request.get_json() or {}
-    year = data.get('year', 2025)
+    year = data.get('year')
+    category = data.get('category')
     max_movies = data.get('max_movies', 50)
+    
+    if not year and not category:
+        return jsonify({"error": "Must provide either 'year' or 'category'"}), 400
     
     try:
         session = sessions[session_id]
-        count = session.load_movies(year, max_movies)
+        count = session.load_movies(year=year, max_movies=max_movies, category=category)
         
         return jsonify({
             "message": f"Loaded {count} movies",
             "movie_count": count,
+            "loaded_count": count,
             "movies": session.movies
         }), 200
     except ValueError as e:

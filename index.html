@@ -22,12 +22,25 @@
                     <input type="text" id="api-url" value="https://movie-ranking-api-ea3e.onrender.com" placeholder="https://your-api-url.com">
                 </div>
                 <div class="form-group">
+                    <label for="load-type">Load By:</label>
+                    <select id="load-type">
+                        <option value="category">Category (Recommended)</option>
+                        <option value="year">Year</option>
+                    </select>
+                </div>
+                <div class="form-group" id="category-group">
+                    <label for="movie-category">Category:</label>
+                    <select id="movie-category">
+                        <option value="">Loading categories...</option>
+                    </select>
+                </div>
+                <div class="form-group hidden" id="year-group">
                     <label for="movie-year">Year:</label>
                     <input type="number" id="movie-year" value="2024" min="1900" max="2030">
                 </div>
                 <div class="form-group">
                     <label for="max-movies">Max Movies:</label>
-                    <input type="number" id="max-movies" value="20" min="1" max="100">
+                    <input type="number" id="max-movies" value="50" min="1" max="100">
                 </div>
                 <button id="create-session-btn" class="btn btn-primary">Create Session & Load Movies</button>
             </div>

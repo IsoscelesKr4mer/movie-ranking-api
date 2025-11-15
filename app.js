@@ -4,9 +4,14 @@ let sessionId = null;
 let currentComparison = null;
 let loadedMovies = [];
 let selectedMovieIds = new Set();
+let categories = {};
 
 // DOM Elements
 const apiUrlInput = document.getElementById('api-url');
+const loadTypeSelect = document.getElementById('load-type');
+const categoryGroup = document.getElementById('category-group');
+const yearGroup = document.getElementById('year-group');
+const movieCategorySelect = document.getElementById('movie-category');
 const movieYearInput = document.getElementById('movie-year');
 const maxMoviesInput = document.getElementById('max-movies');
 const createSessionBtn = document.getElementById('create-session-btn');
@@ -35,6 +40,7 @@ apiUrlInput.addEventListener('change', (e) => {
     apiUrl = e.target.value.replace(/\/$/, ''); // Remove trailing slash
 });
 
+loadTypeSelect.addEventListener('change', handleLoadTypeChange);
 createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
 selectAllBtn.addEventListener('click', selectAllMovies);
 deselectAllBtn.addEventListener('click', deselectAllMovies);
@@ -119,13 +125,32 @@ async function createSessionAndLoadMovies() {
         showMessage('Session created! Loading movies...', 'success');
 
         // Load movies
-        const year = parseInt(movieYearInput.value);
+        const loadType = loadTypeSelect.value;
         const maxMovies = parseInt(maxMoviesInput.value);
+        let loadPayload = { max_movies: maxMovies };
+        
+        if (loadType === 'category') {
+            const category = movieCategorySelect.value;
+            if (!category) {
+                showMessage('Please select a category', 'error');
+                showLoading(false);
+                return;
+            }
+            loadPayload.category = category;
+        } else {
+            const year = parseInt(movieYearInput.value);
+            if (!year) {
+                showMessage('Please enter a year', 'error');
+                showLoading(false);
+                return;
+            }
+            loadPayload.year = year;
+        }
 
         const loadData = await apiCall(
             `/api/session/${sessionId}/movies/load`,
             'POST',
-            { year, max_movies: maxMovies }
+            loadPayload
         );
 
         loadedMovies = loadData.movies || [];
@@ -456,5 +481,36 @@ function reset() {
 }
 
 // Initialize
+loadCategories();
 showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
+
+async function loadCategories() {
+    try {
+        const data = await apiCall('/api/categories', 'GET');
+        categories = data.categories || {};
+        
+        // Populate category dropdown
+        movieCategorySelect.innerHTML = '<option value="">Select a category...</option>';
+        for (const [id, info] of Object.entries(categories)) {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = `${info.name} - ${info.description}`;
+            movieCategorySelect.appendChild(option);
+        }
+    } catch (error) {
+        console.error('Failed to load categories:', error);
+        movieCategorySelect.innerHTML = '<option value="">Error loading categories</option>';
+    }
+}
+
+function handleLoadTypeChange() {
+    const loadType = loadTypeSelect.value;
+    if (loadType === 'category') {
+        categoryGroup.classList.remove('hidden');
+        yearGroup.classList.add('hidden');
+    } else {
+        categoryGroup.classList.add('hidden');
+        yearGroup.classList.remove('hidden');
+    }
+}
 
