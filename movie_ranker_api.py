@@ -179,17 +179,23 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
-        # For MCU and Pixar, prefer keyword with proper filters (ensures only theatrical releases)
-        # For other categories, prefer collection (more reliable and curated)
-        if category in ["marvel_mcu", "pixar"] and cat_info.get("keyword_id"):
+        # For MCU, prefer keyword with proper filters (ensures only theatrical releases)
+        if category == "marvel_mcu" and cat_info.get("keyword_id"):
             company_id = cat_info.get("company_id")
             movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
             # If keyword didn't return enough, fall back to collection
-            if category == "marvel_mcu" and len(movies) < 20:  # MCU should have ~30+ movies
+            if len(movies) < 20:  # MCU should have ~30+ movies
                 print(f"Keyword returned only {len(movies)} movies, trying collection...")
                 movies = []
-            elif category == "pixar" and len(movies) < 20:  # Pixar should have ~29 movies
-                print(f"Keyword returned only {len(movies)} Pixar movies, may need collection or different approach")
+        
+        # For Pixar, try company filter first (more reliable than keyword+company combo)
+        if category == "pixar" and cat_info.get("company_id"):
+            movies = self._load_from_company(cat_info["company_id"], max_movies)
+            # If company didn't work, try keyword without company filter
+            if not movies or len(movies) < 20:
+                print(f"Company filter returned {len(movies)} Pixar movies, trying keyword...")
+                if cat_info.get("keyword_id"):
+                    movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, None)
         
         # Try collection (most reliable for curated lists, or as fallback)
         if not movies and cat_info.get("collection_id"):
@@ -290,6 +296,73 @@ class MovieRankingSession:
             return all_movies
         except Exception as e:
             print(f"Error loading from keyword {keyword_id}: {e}")
+            return []
+    
+    def _load_from_company(self, company_id: int, max_movies: int = 100):
+        """Load movies from TMDb using company filter (e.g., Pixar Animation Studios)"""
+        try:
+            url = f"{API_BASE}/discover/movie"
+            params = {
+                "api_key": API_KEY,
+                "with_companies": company_id,
+                "sort_by": "release_date.asc",
+                "include_adult": False,
+                "language": "en-US",
+                "without_genres": "99",  # Exclude documentaries
+                "with_runtime.gte": 60,  # Only feature films 60+ minutes
+                "with_release_type": "2|3|4",  # Theatrical + Digital releases (includes streaming)
+                "include_video": False  # Exclude direct-to-video format
+            }
+            
+            all_movies = []
+            page = 1
+            
+            # TMDb Discover can return multiple pages
+            while len(all_movies) < max_movies and page <= 5:
+                params["page"] = page
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                results = data.get("results", [])
+                if not results:
+                    break
+                
+                for movie in results:
+                    # Basic validation
+                    if not movie.get("title") or not movie.get("release_date"):
+                        continue
+                    
+                    # Runtime check - feature films are typically 70+ minutes
+                    runtime = movie.get("runtime", 0)
+                    if runtime > 0 and runtime < 70:  # Skip if runtime is less than 70 minutes
+                        continue
+                    
+                    # Exclude TV movies by genre if present
+                    genre_ids = movie.get("genre_ids", [])
+                    if 10402 in genre_ids:  # TV Movie
+                        continue
+                    
+                    formatted_movie = self._format_movie(movie)
+                    if formatted_movie:
+                        all_movies.append(formatted_movie)
+                        
+                        if len(all_movies) >= max_movies:
+                            break
+                
+                # Check if there are more pages
+                total_pages = data.get("total_pages", 1)
+                if page >= total_pages:
+                    break
+                page += 1
+            
+            # Sort movies by release date (earliest first)
+            all_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
+            
+            print(f"Loaded {len(all_movies)} movies from company {company_id}")
+            return all_movies
+        except Exception as e:
+            print(f"Error loading from company {company_id}: {e}")
             return []
     
     def _load_from_collection(self, collection_id: int, max_movies: int = 100):
