@@ -1065,7 +1065,7 @@ if __name__ == '__main__':
         print("TMDb API key loaded successfully.")
     
     # Get port from environment variable (for deployment) or use 5000
-    port = int(os.getenv("PORT", 5000))
+    port = int(os.getenv("PORT", 8000))
     debug = os.getenv("FLASK_ENV") == "development"
     app.run(debug=debug, host='0.0.0.0', port=port)
 

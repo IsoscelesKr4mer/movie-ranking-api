@@ -1,5 +1,7 @@
 // API Configuration
-let apiUrl = 'https://movie-ranking-api-ea3e.onrender.com';
+let apiUrl = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+    ? 'http://localhost:8000'
+    : 'https://movie-ranking-api-ea3e.onrender.com';
 let sessionId = null;
 let currentComparison = null;
 let loadedMovies = [];
@@ -544,6 +546,10 @@ function reset() {
 // Initialize
 console.log('Initializing Movie Ranking App...');
 console.log('API URL:', apiUrl);
+// Sync the input box with resolved apiUrl
+if (apiUrlInput) {
+    apiUrlInput.value = apiUrl;
+}
 loadCategories();
 showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
 
