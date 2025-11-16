@@ -10,6 +10,7 @@ import io
 import re
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+import zlib
 
 app = Flask(__name__)
 # Enable CORS for all routes and origins - allow requests from localhost and any domain
@@ -468,37 +469,58 @@ class MovieRankingSession:
     def _search_movie_tmdb(self, title: str, year: Optional[int] = None) -> Optional[Dict]:
         """Search for a movie in TMDb by title and optionally year"""
         try:
-            url = f"{API_BASE}/search/movie"
-            params = {
-                "api_key": API_KEY,
-                "query": title,
-                "include_adult": False,
-                "language": "en-US"
-            }
-            
-            if year:
-                params["year"] = year
-            
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            
-            results = data.get("results", [])
-            if not results:
-                return None
-            
-            # If year provided, prefer exact match, otherwise use first result
-            if year:
-                for movie in results:
-                    release_date = movie.get("release_date", "")
-                    if release_date:
-                        release_year = int(release_date.split("-")[0])
-                        if release_year == year:
-                            # Get full movie details
-                            return self._get_movie_details(movie["id"])
-            
-            # Return first result with full details
-            return self._get_movie_details(results[0]["id"])
+            def do_search(query: str, year_param: Optional[int]) -> Optional[Dict]:
+                url = f"{API_BASE}/search/movie"
+                params = {
+                    "api_key": API_KEY,
+                    "query": query,
+                    "include_adult": False,
+                    "language": "en-US"
+                }
+                if year_param:
+                    params["year"] = year_param
+                resp = requests.get(url, params=params, timeout=10)
+                resp.raise_for_status()
+                data_local = resp.json()
+                res = data_local.get("results", [])
+                if not res:
+                    return None
+                # If year provided, prefer exact match
+                if year_param:
+                    for m in res:
+                        rd = m.get("release_date", "")
+                        if rd:
+                            try:
+                                if int(rd.split("-")[0]) == year_param:
+                                    return self._get_movie_details(m["id"])
+                            except ValueError:
+                                continue
+                return self._get_movie_details(res[0]["id"])
+
+            # Try original
+            movie = do_search(title, year)
+            if movie:
+                return movie
+
+            # Clean title: strip special chars and suffixes (e.g., asterisks, en-dash notes)
+            cleaned = re.sub(r"[\u2013\u2014\-–—:*••\[\]\(\)]+", " ", title)  # dashes, asterisk, brackets
+            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+            # Remove trailing qualifiers like " (2025)" if present in source
+            cleaned = re.sub(r"\s\(\d{4}\)$", "", cleaned)
+            # Remove common sequel symbols like "²"
+            cleaned = cleaned.replace("²", " 2")
+
+            if cleaned and cleaned.lower() != (title or "").lower():
+                movie = do_search(cleaned, year)
+                if movie:
+                    return movie
+
+            # Try without year
+            movie = do_search(cleaned or title, None)
+            if movie:
+                return movie
+
+            return None
         except Exception as e:
             print(f"Error searching for movie '{title}' ({year}): {e}")
             return None
@@ -847,6 +869,28 @@ class MovieRankingSession:
             imported_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
             
             # Store imported movies
+            # If some titles could not be matched in TMDb, create placeholder entries so users can still rank
+            if failed_imports:
+                print(f"Creating placeholders for {len(failed_imports)} unmatched titles")
+                for fi in failed_imports:
+                    title = fi.get("title")
+                    if not title:
+                        continue
+                    # Stable negative ID based on CRC32 of title
+                    placeholder_id = -int(zlib.crc32(title.encode("utf-8")))
+                    placeholder = {
+                        "id": placeholder_id,
+                        "title": title,
+                        "poster_path": "",
+                        "poster_url": "",
+                        "release_date": "",
+                        "vote_average": 0,
+                        "overview": ""
+                    }
+                    # Avoid duplicates if a real movie with same title already added
+                    if not any(m.get("title", "").lower() == title.lower() for m in imported_movies):
+                        imported_movies.append(placeholder)
+
             self.movies = imported_movies
             
             if failed_imports:
