@@ -15,6 +15,8 @@ const movieCategorySelect = document.getElementById('movie-category');
 const movieYearInput = document.getElementById('movie-year');
 const maxMoviesInput = document.getElementById('max-movies');
 const createSessionBtn = document.getElementById('create-session-btn');
+const letterboxdFileInput = document.getElementById('letterboxd-file');
+const importLetterboxdBtn = document.getElementById('import-letterboxd-btn');
 const sessionInfo = document.getElementById('session-info');
 const sessionIdSpan = document.getElementById('session-id');
 const sessionStatusSpan = document.getElementById('session-status');
@@ -42,6 +44,7 @@ apiUrlInput.addEventListener('change', (e) => {
 
 loadTypeSelect.addEventListener('change', handleLoadTypeChange);
 createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
+importLetterboxdBtn.addEventListener('click', importLetterboxdList);
 selectAllBtn.addEventListener('click', selectAllMovies);
 deselectAllBtn.addEventListener('click', deselectAllMovies);
 confirmSelectionBtn.addEventListener('click', confirmSelection);

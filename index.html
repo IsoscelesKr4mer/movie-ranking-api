@@ -43,6 +43,17 @@
                     <input type="number" id="max-movies" value="100" min="1" max="200">
                 </div>
                 <button id="create-session-btn" class="btn btn-primary">Create Session & Load Movies</button>
+                
+                <div class="divider">OR</div>
+                
+                <div class="form-group">
+                    <label for="letterboxd-file">Import Letterboxd List (CSV):</label>
+                    <input type="file" id="letterboxd-file" accept=".csv" style="margin-bottom: 10px;">
+                    <button id="import-letterboxd-btn" class="btn btn-secondary">Import & Load Letterboxd List</button>
+                    <small style="display: block; margin-top: 5px; color: #666;">
+                        Export your list from Letterboxd as CSV and upload it here
+                    </small>
+                </div>
             </div>
             <div id="session-info" class="session-info hidden">
                 <p><strong>Session ID:</strong> <span id="session-id"></span></p>

@@ -462,6 +462,32 @@ header p {
     border-left: 4px solid #3b82f6;
 }
 
+.divider {
+    text-align: center;
+    margin: 20px 0;
+    position: relative;
+    color: #666;
+    font-weight: bold;
+}
+
+.divider::before,
+.divider::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 45%;
+    height: 1px;
+    background: #ddd;
+}
+
+.divider::before {
+    left: 0;
+}
+
+.divider::after {
+    right: 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .movies-comparison {

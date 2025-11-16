@@ -5,6 +5,8 @@ import os
 from typing import List, Dict, Optional
 import uuid
 from datetime import datetime, timedelta
+import csv
+import io
 
 app = Flask(__name__)
 # Enable CORS for all routes and origins - allow requests from localhost and any domain
@@ -460,6 +462,109 @@ class MovieRankingSession:
             "overview": (movie.get("overview", "")[:200] + "...") if movie.get("overview") else ""
         }
     
+    def _search_movie_tmdb(self, title: str, year: Optional[int] = None) -> Optional[Dict]:
+        """Search for a movie in TMDb by title and optionally year"""
+        try:
+            url = f"{API_BASE}/search/movie"
+            params = {
+                "api_key": API_KEY,
+                "query": title,
+                "include_adult": False,
+                "language": "en-US"
+            }
+            
+            if year:
+                params["year"] = year
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            results = data.get("results", [])
+            if not results:
+                return None
+            
+            # If year provided, prefer exact match, otherwise use first result
+            if year:
+                for movie in results:
+                    release_date = movie.get("release_date", "")
+                    if release_date:
+                        release_year = int(release_date.split("-")[0])
+                        if release_year == year:
+                            # Get full movie details
+                            return self._get_movie_details(movie["id"])
+            
+            # Return first result with full details
+            return self._get_movie_details(results[0]["id"])
+        except Exception as e:
+            print(f"Error searching for movie '{title}' ({year}): {e}")
+            return None
+    
+    def _get_movie_details(self, movie_id: int) -> Optional[Dict]:
+        """Get full movie details from TMDb"""
+        try:
+            url = f"{API_BASE}/movie/{movie_id}"
+            params = {"api_key": API_KEY}
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            movie = response.json()
+            return self._format_movie(movie)
+        except Exception as e:
+            print(f"Error getting movie details for ID {movie_id}: {e}")
+            return None
+    
+    def import_letterboxd_csv(self, csv_content: str) -> int:
+        """Import movies from a Letterboxd CSV file"""
+        if not API_KEY:
+            raise ValueError("TMDb API key not configured")
+        
+        imported_movies = []
+        failed_imports = []
+        
+        # Parse CSV content
+        csv_file = io.StringIO(csv_content)
+        
+        # Letterboxd CSV format: Name,Year,URL (and potentially other columns)
+        # Handle both with and without header row
+        reader = csv.DictReader(csv_file)
+        
+        for row in reader:
+            # Letterboxd uses "Name" for title, sometimes "Title"
+            title = row.get("Name") or row.get("Title") or row.get("name") or row.get("title")
+            year_str = row.get("Year") or row.get("year")
+            
+            if not title:
+                continue
+            
+            # Parse year (handle empty strings, non-numeric values)
+            year = None
+            if year_str:
+                try:
+                    year = int(year_str.strip())
+                except (ValueError, AttributeError):
+                    pass
+            
+            # Search for movie in TMDb
+            movie = self._search_movie_tmdb(title, year)
+            
+            if movie:
+                # Check for duplicates
+                if not any(m.get("id") == movie.get("id") for m in imported_movies):
+                    imported_movies.append(movie)
+            else:
+                failed_imports.append({"title": title, "year": year})
+        
+        # Sort by release date
+        imported_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
+        
+        # Store imported movies
+        self.movies = imported_movies
+        
+        if failed_imports:
+            print(f"Failed to import {len(failed_imports)} movies: {failed_imports[:5]}...")
+        
+        return len(imported_movies)
+    
     def select_movies(self, movie_ids: List[int]):
         """Select movies that the user has seen (by their TMDb IDs)"""
         if not self.movies:
@@ -798,6 +903,45 @@ def select_movies(session_id: str):
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": f"Failed to select movies: {str(e)}"}), 500
+
+
+@app.route('/api/session/<session_id>/movies/import', methods=['POST'])
+def import_letterboxd(session_id: str):
+    """Import movies from a Letterboxd CSV file"""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+    
+    # Check if CSV file is uploaded or CSV content is provided
+    if 'file' in request.files:
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Read file content
+        csv_content = file.read().decode('utf-8')
+    elif request.is_json:
+        # CSV content as JSON string
+        data = request.get_json() or {}
+        csv_content = data.get('csv_content', '')
+        if not csv_content:
+            return jsonify({"error": "No CSV content provided"}), 400
+    else:
+        return jsonify({"error": "No file or CSV content provided"}), 400
+    
+    try:
+        session = sessions[session_id]
+        count = session.import_letterboxd_csv(csv_content)
+        
+        return jsonify({
+            "message": f"Imported {count} movies from Letterboxd",
+            "movie_count": count,
+            "loaded_count": count,
+            "movies": session.movies
+        }), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to import Letterboxd CSV: {str(e)}"}), 500
 
 
 @app.route('/api/session/<session_id>/ranking/start', methods=['POST'])
