@@ -145,6 +145,30 @@ function extractTitlesFromHtml(html) {
   } catch {}
 
   // Primary selectors per Letterboxd shared lists
+  // FIX: include React-LazyPoster components carrying rich data attributes
+  const lazyPosterNodes = Array.from(doc.querySelectorAll('.react-component[data-component-class="LazyPoster"]'));
+  lazyPosterNodes.forEach(node => {
+    const name = node.getAttribute('data-item-name') || node.getAttribute('data-item-full-display-name') || '';
+    const slug = node.getAttribute('data-item-slug') || node.getAttribute('data-target-link') || '';
+    let title = (name || '').trim();
+    let year = null;
+    if (title) {
+      const m = title.match(/\b(19|20)\d{2}\b/);
+      if (m) {
+        year = m[0];
+        // Keep original title text including symbols like * or ²
+        title = title;
+      }
+    }
+    if (!year && slug) {
+      const y2 = String(slug).match(/-(\d{4})(?:\/|$)/);
+      if (y2) year = y2[1];
+    }
+    if (title && title.length >= 2) {
+      items.push({ title, year, rank: 0 });
+    }
+  });
+
   const candidates = Array.from(doc.querySelectorAll('ul.film-list li, li.film-list-entry, li.poster-container, div.film-list-item, div[class*="film-list-item"], .poster-and-title'));
   candidates.forEach(node => {
     const titleEl = node.querySelector('h2.film-title a, .film-title a, h2 a, .title a');
