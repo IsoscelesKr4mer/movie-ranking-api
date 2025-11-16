@@ -541,10 +541,36 @@ class MovieRankingSession:
     
     # Letterboxd CSV import removed
 
+    def _normalize_for_match(self, s: str) -> str:
+        """Normalize titles for fuzzy match: lowercase, strip punctuation, normalize symbols."""
+        if not s:
+            return ""
+        s = s.lower()
+        # Common symbol normalizations
+        s = s.replace("²", " 2").replace("*", "").replace("–", "-").replace("—", "-")
+        # Remove non-alnum except spaces and hyphens
+        s = re.sub(r"[^a-z0-9\s\-]", " ", s)
+        # Collapse whitespace
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def _word_overlap_score(self, a: str, b: str) -> float:
+        """Simple word-overlap score between normalized strings (0..1)."""
+        wa = set(a.split())
+        wb = set(b.split())
+        if not wa or not wb:
+            return 0.0
+        inter = len(wa & wb)
+        union = len(wa | wb)
+        return inter / union if union else 0.0
+
     def _search_best_match_simple(self, title: str) -> Optional[Dict]:
-        """Search TMDb by title and return best simple match (prefers vote_count > 0, then highest vote_average)."""
+        """Search TMDb by title and select best match by fuzzy similarity + quality signals."""
         try:
-            def do_search(page: int = 1) -> Optional[Dict]:
+            norm_q = self._normalize_for_match(title)
+            short_query = len(norm_q) <= 3
+
+            def do_page(page: int) -> list:
                 url = f"{API_BASE}/search/movie"
                 params = {
                     "api_key": API_KEY,
@@ -556,22 +582,64 @@ class MovieRankingSession:
                 resp = requests.get(url, params=params, timeout=10)
                 resp.raise_for_status()
                 data_local = resp.json()
-                results = data_local.get("results", []) or []
-                if not results:
-                    return None
-                with_votes = [r for r in results if (r.get("vote_count") or 0) > 0]
-                if with_votes:
-                    with_votes.sort(key=lambda r: (r.get("vote_average") or 0), reverse=True)
-                    return with_votes[0]
-                return results[0]
+                return data_local.get("results", []) or []
 
-            first = do_search(1)
-            if first:
-                return self._format_movie(first)
-            second = do_search(2)
-            if second:
-                return self._format_movie(second)
-            return None
+            all_results = []
+            for p in (1, 2):
+                try:
+                    all_results.extend(do_page(p))
+                except Exception:
+                    continue
+
+            if not all_results:
+                return None
+
+            best = None
+            best_score = -1.0
+            for r in all_results:
+                cand_title = r.get("title") or r.get("original_title") or ""
+                norm_c = self._normalize_for_match(cand_title)
+
+                # Exact normalized match gets very high score
+                score = 0.0
+                if norm_c == norm_q and norm_c:
+                    score += 1.0
+                else:
+                    # Word overlap
+                    score += 0.6 * self._word_overlap_score(norm_q, norm_c)
+                    # Startswith bonus for short queries like "F1"
+                    if short_query and norm_c.startswith(norm_q):
+                        score += 0.3
+                    # Substring bonus
+                    if not short_query and norm_q and norm_q in norm_c:
+                        score += 0.15
+
+                # Quality signals
+                vote_count = r.get("vote_count") or 0
+                vote_avg = r.get("vote_average") or 0.0
+                popularity = r.get("popularity") or 0.0
+                score += min(vote_count / 5000.0, 0.2)  # up to +0.2
+                score += min(vote_avg / 50.0, 0.1)      # up to +0.1
+                score += min(popularity / 500.0, 0.1)   # up to +0.1
+
+                # Year recency slight bias (avoid random 1960s matches unless exact)
+                rd = r.get("release_date") or ""
+                try:
+                    y = int(rd[:4]) if len(rd) >= 4 else None
+                except ValueError:
+                    y = None
+                if y is not None and y < 1980 and norm_c != norm_q:
+                    score -= 0.15
+
+                if score > best_score:
+                    best_score = score
+                    best = r
+
+            # Thresholds: for ultra-short queries require stronger evidence
+            min_required = 0.55 if short_query else 0.35
+            if best is None or best_score < min_required:
+                return None
+            return self._format_movie(best)
         except Exception as e:
             print(f"Simple search error for '{title}': {e}")
             return None
