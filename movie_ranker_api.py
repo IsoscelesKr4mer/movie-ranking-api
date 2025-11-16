@@ -95,15 +95,15 @@ MOVIE_CATEGORIES = {
     "matrix": {
         "name": "The Matrix",
         "description": "The Matrix franchise",
-        # FIX: Correct TMDb collection ID for The Matrix Collection (was 469 by mistake)
+        # Prefer collection; fallback to explicit IDs if collection fetch fails
+        # FIX: Correct TMDb collection ID for The Matrix Collection (was 469 before)
         "collection_id": 234,  # The Matrix Collection
-        "movie_ids": None
+        "movie_ids": [603, 604, 605, 624860]  # The Matrix (1999), Reloaded (2003), Revolutions (2003), Resurrections (2021)
     },
     "xmen": {
         "name": "X-Men Films",
         "description": "X-Men movie franchise",
-        # FIX: Correct TMDb collection ID for X‑Men film series\n        # TMDb \"X-Men Collection\" is 748 (includes the main X‑Men films)\n        \"collection_id\": 748,\n        # No curated IDs; rely on collection first, then fallback logic if needed\n",
-        "movie_ids": None
+        # FIX: Correct TMDb collection ID for X‑Men film series\n        # TMDb \"X-Men Collection\" is 748 (main X‑Men films); also include explicit IDs for robustness\n        \"collection_id\": 748,\n        \"movie_ids\": [36657, 36658, 36668, 2080, 49538, 76170, 127585, 246655, 263115, 320288, 293660, 383498, 340102]\n
     }
 }
 
