@@ -213,19 +213,19 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
       if (allItems.length < maxItems) allItems.push(it);
     });
 
-    const nextUrl = getNextPageUrl(html, currentUrl);
-    currentUrl = nextUrl || null;
-
-    // If first page yielded nothing (share page variant), retry base list URL once
-    if (!currentUrl && pageCount === 1 && allItems.length === 0) {
+    // If first page produced nothing, retry base list URL immediately (strip /share/...)
+    if (pageCount === 1 && allItems.length === 0) {
       try {
-        const stripped = url;
-        const base = stripped.replace(/\/share\/.*$/, '').replace(/\/\?page=\d+$/, '');
-        if (base !== stripped) {
+        const base = url.replace(/\/share\/.*$/, '').replace(/\/\?page=\d+$/, '');
+        if (base && base !== currentUrl) {
           currentUrl = base;
+          continue; // retry loop with base URL
         }
       } catch {}
     }
+
+    const nextUrl = getNextPageUrl(html, currentUrl);
+    currentUrl = nextUrl || null;
   }
 
   const result = {
