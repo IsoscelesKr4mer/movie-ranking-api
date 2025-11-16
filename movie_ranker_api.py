@@ -508,6 +508,10 @@ class MovieRankingSession:
                                     return self._get_movie_details(m["id"])
                             except ValueError:
                                 continue
+                # If a year was provided but no exact match, do not accept a wrong-year fallback
+                if year_param:
+                    return None
+                # No year: return best first result
                 return self._get_movie_details(res[0]["id"])
 
             # Try original
@@ -526,9 +530,12 @@ class MovieRankingSession:
                     return movie
 
             # Try without year
-            movie = do_search(cleaned or title, None)
-            if movie:
-                return movie
+            # Only allow no-year fallback when an explicit year was NOT provided,
+            # to avoid mismatching to similarly named titles from other years.
+            if year is None:
+                movie = do_search(cleaned or title, None)
+                if movie:
+                    return movie
 
             return None
         except Exception as e:
@@ -908,6 +915,7 @@ class MovieRankingSession:
                 print(f"Creating placeholders for {len(failed_imports)} unmatched titles")
                 for fi in failed_imports:
                     title = fi.get("title")
+                    yr = fi.get("year")
                     if not title:
                         continue
                     title = self._normalize_title(title)
@@ -918,7 +926,7 @@ class MovieRankingSession:
                         "title": title,
                         "poster_path": "",
                         "poster_url": "",
-                        "release_date": "",
+                        "release_date": f"{yr}-01-01" if isinstance(yr, int) else "",
                         "vote_average": 0,
                         "overview": ""
                     }
