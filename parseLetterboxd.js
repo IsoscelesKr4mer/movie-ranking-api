@@ -367,8 +367,24 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
     currentUrl = nextUrl || null;
   }
 
+  // Normalize items: ensure year is a string (or 'TBD') and compute absolute poster URL.
+  const normalizedItems = allItems.map((it, idx) => {
+    const rawPoster = it.poster_url || null;
+    const absolutePoster = rawPoster ? (/^https?:\/\//i.test(rawPoster) ? rawPoster : `https://letterboxd.com${rawPoster}`) : null;
+    const yr = it.year ? String(it.year) : 'TBD';
+    return {
+      rank: typeof it.rank === 'number' ? it.rank : (idx + 1),
+      title: it.title,
+      year: yr,
+      poster_url: absolutePoster,
+      // alias for convenience in UI
+      posterUrl: absolutePoster,
+      originalIndex: typeof it.rank === 'number' ? it.rank - 1 : idx
+    };
+  });
+
   const result = {
-    items: allItems,
+    items: normalizedItems,
     truncated: allItems.length >= maxItems,
     pagesParsed: pageCount
   };
@@ -378,6 +394,15 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
 
 // Expose to window
 window.parseLetterboxdList = parseLetterboxdList;
+
+// Simple helper to run a full scrape and log the first few items for debugging
+async function testParse(url, limit = 10) {
+  const { items } = await parseLetterboxdList(url, 200, (s) => console.log('Scrape:', s));
+  console.table(items.slice(0, Math.min(limit, items.length)));
+  return items;
+}
+window.testParse = testParse;
+
 window.__lb_utils = {
   normalizeLetterboxdUrl,
   extractTitlesFromHtml,

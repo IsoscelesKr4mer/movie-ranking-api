@@ -1,9 +1,12 @@
-// UI glue for parsing Letterboxd and enriching via TMDb, then importing into a backend session
+// UI glue for scraping Letterboxd and importing into a backend session.
+// SHIFT: The import flow now relies on scraped Letterboxd data (title/year/poster)
+// for accuracy, eliminating the need to query TMDb during import. The tmdbService
+// remains available for other app features (e.g., optional high‑res poster lookups),
+// but the default import avoids TMDb to prevent mismatches (e.g., "F1", "Friendship").
 /**
  * Run the importer flow:
- * - Parse Letterboxd titles (with pagination)
- * - Configure TMDb and enrich
- * - Preview results with checkmarks
+ * - Scrape Letterboxd titles/years/posters (with pagination)
+ * - Preview with ✓ when both title and poster are present
  * - Create session and set movies server-side for downstream ranking
  */
 (function () {
@@ -24,8 +27,8 @@
 
   /**
    * Render a quick preview list into selection grid (rank preserved).
-   * Uses a checkmark/✗ to indicate TMDb match status.
-   * @param {Array<import('./tmdbService').EnrichedMovie>} movies
+   * ✓ indicates we have both a title and a poster URL from the LB scrape.
+   * @param {Array<any>} movies
    */
   function renderPreview(movies) {
     const grid = document.getElementById('movies-selection-grid');
@@ -36,14 +39,15 @@
       const item = document.createElement('div');
       item.className = 'movie-select-item';
       item.dataset.movieId = m.id || `nomatch-${idx}`;
-      const mismatch = m.matched && m.requested_year && m.release_date && !m.year_match;
+      const complete = Boolean(m.matched);
+      const yearText = (m.release_date && m.release_date.split('-')[0]) || 'TBD';
       item.innerHTML = `
-        <div class="checkmark" title="${m.matched ? (m.year_match ? 'TMDb match (year matched)' : 'TMDb match (year mismatch ?)') : 'No TMDb match'}">${m.matched ? (mismatch ? '?' : '✓') : '✗'}</div>
-        <img loading="lazy" src="${m.poster_url || m.fallback_poster || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
+        <div class="checkmark" title="${complete ? 'Complete (title + poster)' : 'Missing poster/title'}">${complete ? '✓' : '✗'}</div>
+        <img loading="lazy" src="${m.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
              alt="${m.title}"
              onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
         <h5>${m.title}</h5>
-        <p style="font-size: 0.8rem; color: #666;">${(m.release_date || '').split('-')[0] || 'TBD'}${m.requested_year ? ` (req ${m.requested_year})` : ''}</p>
+        <p style="font-size: 0.8rem; color: #666;">${yearText}</p>
       `;
       grid.appendChild(item);
     });
@@ -56,22 +60,6 @@
    * @param {Array<any>} movies
    */
   async function importToSession(movies, parsed) {
-    // Only keep TMDb matches that either have no requested year or match the requested year
-    const matched = movies.filter(m => m.matched && m.id && (!m.requested_year || m.year_match));
-    // Build fallbacks using original parsed items
-    const fallbacks = [];
-    movies.forEach((m, idx) => {
-      if (!m.matched || (m.requested_year && !m.year_match)) {
-        const p = parsed.items[idx];
-        if (p && p.title) {
-          fallbacks.push({
-            title: p.title,
-            year: p.year || null,
-            poster_url: p.poster_url || null
-          });
-        }
-      }
-    });
     // Create session
     const sessionData = await apiCall('/api/session/create', 'POST');
     window.sessionId = sessionData.session_id;
@@ -79,17 +67,12 @@
     document.getElementById('session-info').classList.remove('hidden');
     document.getElementById('session-status').textContent = 'Session created';
 
-    // Build a single ordered list preserving the original ranks:
-    // for each parsed index, if we have an acceptable TMDb match at that index, keep its id;
-    // otherwise send a fallback with LB title/year/poster so order is preserved.
-    const orderedItems = parsed.items.map((p, idx) => {
-      const m = movies[idx];
-      const isGoodMatch = m && m.matched && m.id && (!m.requested_year || m.year_match);
-      if (isGoodMatch) {
-        return { id: m.id };
-      }
-      return { title: p.title, year: p.year || null, poster_url: p.poster_url || null };
-    });
+    // Build a single ordered list preserving the original ranks using LB-scraped data
+    const orderedItems = (parsed.items || []).map((p) => ({
+      title: p.title,
+      year: p.year || null,
+      poster_url: p.poster_url || p.posterUrl || null
+    }));
 
     const setResp = await apiCall(
       `/api/session/${window.sessionId}/movies/set_bulk`,
@@ -104,7 +87,7 @@
     if (typeof displayMoviesForSelection === 'function') {
       displayMoviesForSelection(window.loadedMovies);
     } else {
-      renderPreview(matched);
+      renderPreview(movies); // Pass the original movies array to renderPreview
     }
   }
 
@@ -115,7 +98,7 @@
   async function runLetterboxdImport(url) {
     setStatus('');
     try {
-      setStatus('Parsing list...');
+      setStatus('Scraping list...');
       const parsed = await window.parseLetterboxdList(url, 200, (s) => setStatus(s));
       if (!parsed.items || parsed.items.length === 0) {
         throw new Error('No titles found. Ensure the list is public.');
@@ -124,23 +107,16 @@
         addMessage('List truncated to first 200 items to avoid overload.', 'info');
       }
 
-      setStatus('Matching titles on TMDb...');
-      // Send title + year for precise matching
-      const payloadItems = parsed.items.map(it => ({ title: it.title, year: it.year || null }));
-      const enrichResp = await apiCall('/api/tmdb/enrich', 'POST', { items: payloadItems });
-      let enriched = (enrichResp.items || []).map((m, idx) => {
-        const p = parsed.items[idx] || {};
-        // Merge in LB poster for unmatched, and ensure title doesn't duplicate year
-        const cleanTitle = (m.matched ? (m.title || '') : (p.title || m.title || '')).replace(/\s*\(\d{4}\)\s*$/, '').trim();
-        const reqYear = p.year || m.requested_year || null;
-        const poster = m.poster_url || p.poster_url || null;
-        return {
-          ...m,
-          title: cleanTitle,
-          requested_year: reqYear,
-          poster_url: poster
-        };
-      });
+      // Use scraped data directly; mark ✓ if we have a title and poster URL
+      const enriched = (parsed.items || []).map((p) => ({
+        id: null,
+        matched: Boolean(p.title) && Boolean(p.poster_url || p.posterUrl),
+        title: (p.title || '').replace(/\s*\(\d{4}\)\s*$/, '').trim(),
+        release_date: p.year && p.year !== 'TBD' ? `${p.year}-01-01` : null,
+        requested_year: p.year && p.year !== 'TBD' ? p.year : null,
+        year_match: true,
+        poster_url: p.poster_url || p.posterUrl || null
+      }));
 
       // Display preview with checkmarks
       renderPreview(enriched);
