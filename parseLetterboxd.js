@@ -152,9 +152,18 @@ function extractTitlesFromHtml(html) {
     const name = node.getAttribute('data-item-name') || node.getAttribute('data-item-full-display-name') || '';
     const slug = node.getAttribute('data-item-slug') || node.getAttribute('data-target-link') || '';
     const posterDataUrl = node.getAttribute('data-poster-url') || '';
-    // Try to read image src if present (higher-res available via srcset too)
-    const img = node.querySelector('img.image');
-    const imgSrc = img?.getAttribute('src') || '';
+    // Try to read image src or lazy-src/srcset (LB uses <img src> or data-src/srcset)
+    const img = node.querySelector('img');
+    let imgSrc = img ? (img.getAttribute('src') || img.getAttribute('data-src') || '') : '';
+    if (!imgSrc && img) {
+      const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
+      if (set) {
+        const first = set.split(',')[0]?.trim();
+        if (first) {
+          imgSrc = first.split(' ')[0];
+        }
+      }
+    }
     let title = (name || '').trim();
     let year = null;
     if (title) {
@@ -170,7 +179,14 @@ function extractTitlesFromHtml(html) {
       if (y2) year = y2[1];
     }
     if (title && title.length >= 2) {
-      const poster_url = imgSrc || (posterDataUrl ? new URL(posterDataUrl, location.origin).toString() : null);
+      let poster_url = null;
+      if (imgSrc) {
+        // ensure absolute
+        poster_url = /^https?:\/\//i.test(imgSrc) ? imgSrc : `https://letterboxd.com${imgSrc}`;
+      } else if (posterDataUrl) {
+        // data-item gives a relative page to the poster; prefix LB host so it resolves
+        poster_url = posterDataUrl.startsWith('http') ? posterDataUrl : `https://letterboxd.com${posterDataUrl}`;
+      }
       items.push({ title, year, poster_url: poster_url || null, rank: 0 });
     }
   });
@@ -194,9 +210,22 @@ function extractTitlesFromHtml(html) {
       year = m ? m[0] : null;
     }
 
-    // Poster from image if present
-    const img = node.querySelector('img[alt], img.image');
-    const poster_url = img?.getAttribute('src') || null;
+  // Poster from image if present (support lazy-loaded attributes)
+  const img = node.querySelector('img[alt], img.image, img');
+  let poster_url = null;
+  if (img) {
+    let src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+    if (!src) {
+      const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
+      const first = set.split(',')[0]?.trim();
+      if (first) {
+        src = first.split(' ')[0];
+      }
+    }
+    if (src) {
+      poster_url = /^https?:\/\//i.test(src) ? src : `https://letterboxd.com${src}`;
+    }
+  }
 
     // Basic filtering
     const lower = title.toLowerCase();
@@ -229,9 +258,18 @@ function extractTitlesFromHtml(html) {
         const text = titleAttr.trim();
         if (text) items.push({ title: text, year: null, rank: 0 });
       } else {
-        const img = div.querySelector('img[alt]');
-        const text = img?.getAttribute('alt')?.trim();
-        if (text) items.push({ title: text, year: null, rank: 0 });
+        const img = div.querySelector('img');
+        const alt = img?.getAttribute('alt')?.trim();
+        let src = img ? (img.getAttribute('src') || img.getAttribute('data-src') || '') : '';
+        if (!src && img) {
+          const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
+          const first = set.split(',')[0]?.trim();
+          if (first) {
+            src = first.split(' ')[0];
+          }
+        }
+        const poster = src ? (/^https?:\/\//i.test(src) ? src : `https://letterboxd.com${src}`) : null;
+        if (alt) items.push({ title: alt, year: null, poster_url: poster, rank: 0 });
       }
     });
   }
