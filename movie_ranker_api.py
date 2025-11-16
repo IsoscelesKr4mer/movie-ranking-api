@@ -143,30 +143,30 @@ class MovieRankingSession:
             all_movies = self._load_movies_from_category(category, max_movies)
         elif year:
             # Load from year (original functionality)
-            url = f"{API_BASE}/discover/movie"
-            params = {
-                "api_key": API_KEY,
-                "primary_release_year": year,
-                "sort_by": "popularity.desc",
-                "page": 1
-            }
+        url = f"{API_BASE}/discover/movie"
+        params = {
+            "api_key": API_KEY,
+            "primary_release_year": year,
+            "sort_by": "popularity.desc",
+            "page": 1
+        }
+        
+        page = 1
+        while len(all_movies) < max_movies and page <= 5:
+            params["page"] = page
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
             
-            page = 1
-            while len(all_movies) < max_movies and page <= 5:
-                params["page"] = page
-                response = requests.get(url, params=params, timeout=10)
-                response.raise_for_status()
-                data = response.json()
-                
-                for movie in data.get("results", []):
-                    if movie.get("poster_path") and movie.get("title"):
+            for movie in data.get("results", []):
+                if movie.get("poster_path") and movie.get("title"):
                         all_movies.append(self._format_movie(movie))
-                        if len(all_movies) >= max_movies:
-                            break
-                
-                if not data.get("results"):
-                    break
-                page += 1
+                    if len(all_movies) >= max_movies:
+                        break
+            
+            if not data.get("results"):
+                break
+            page += 1
         else:
             raise ValueError("Must provide either year or category")
         
@@ -583,8 +583,35 @@ class MovieRankingSession:
             response = requests.get(letterboxd_url, headers=headers, timeout=15)
             response.raise_for_status()
             
+            # Debug: Check if response contains film links
+            response_text = response.text
+            film_link_count = len(re.findall(r'/film/[^/"\'\s]+', response_text))
+            print(f"DEBUG: Found {film_link_count} /film/ links in raw HTML response")
+            
             # Parse HTML
             soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Try to find embedded JSON data in script tags (Letterboxd often embeds data here)
+            script_tags = soup.find_all('script')
+            json_data = None
+            for script in script_tags:
+                if script.string:
+                    # Look for JSON-LD or window.__INITIAL_STATE__ or similar
+                    if 'window.__' in script.string or '__INITIAL_STATE__' in script.string or 'film' in script.string.lower():
+                        # Try to extract JSON
+                        json_match = re.search(r'\{[^{}]*"films?"[^{}]*\}', script.string)
+                        if json_match:
+                            try:
+                                import json
+                                json_data = json.loads(json_match.group())
+                                print(f"DEBUG: Found embedded JSON data")
+                            except:
+                                pass
+            
+            # Also check for data attributes or meta tags
+            meta_tags = soup.find_all('meta', property=re.compile(r'film|movie'))
+            if meta_tags:
+                print(f"DEBUG: Found {len(meta_tags)} film-related meta tags")
             
             # Letterboxd list structure: movies are in <li> elements with class "listitem" or "poster-container"
             # Each contains an <a> tag with href="/film/..." and data-film-slug
@@ -631,9 +658,28 @@ class MovieRankingSession:
             if not film_items or len(film_items) < 5:
                 all_film_links = soup.find_all('a', href=re.compile(r'/film/'))
                 print(f"Strategy 6: Found {len(all_film_links)} total /film/ links in HTML")
-                film_items = all_film_links if all_film_links else film_items
+                if all_film_links:
+                    film_items = all_film_links
+            
+            # Strategy 7: Try regex extraction directly from response text as last resort
+            if not film_items or len(film_items) < 5:
+                # Extract all unique film slugs from the raw HTML
+                film_slugs = re.findall(r'/film/([^/"\'\s<>?&#]+)', response_text)
+                unique_slugs = list(set(film_slugs))
+                print(f"Strategy 7: Found {len(unique_slugs)} unique film slugs via regex")
+                if unique_slugs:
+                    # Filter out obviously wrong matches (like CSS classes, etc.)
+                    valid_slugs = [s for s in unique_slugs if len(s) > 3 and not s.startswith('css') and not s.startswith('http')]
+                    print(f"Strategy 7: {len(valid_slugs)} valid slugs after filtering")
+                    # Create pseudo-items from slugs
+                    for slug in valid_slugs[:100]:  # Limit to 100 to avoid too many
+                        film_items.append({"slug": slug, "href": f"/film/{slug}"})
             
             print(f"Found {len(film_items)} potential film items on Letterboxd page")
+            
+            # Debug: Print first few items for troubleshooting
+            if film_items:
+                print(f"DEBUG: First 3 items: {[str(item)[:100] for item in film_items[:3]]}")
             
             # Extract movie titles and years
             movies_to_search = []
