@@ -10,8 +10,23 @@ import re
 from urllib.parse import urlparse
 
 app = Flask(__name__)
-# Enable CORS for all routes and origins - allow requests from localhost and any domain
-CORS(app, origins="*", methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Content-Type"])
+# Enable CORS for all routes and origins - allow requests from anywhere (Pages, localhost, etc.)
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+@app.after_request
+def add_cors_headers(response):
+    # Ensure CORS headers also exist on error responses (e.g., 4xx/5xx) so browsers don't mask them as CORS failures
+    response.headers.setdefault("Access-Control-Allow-Origin", "*")
+    response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.setdefault("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+    return response
+
+@app.route('/<path:dummy>', methods=['OPTIONS'])
+def cors_preflight(dummy):
+    # Explicit OPTIONS responder for any path to satisfy preflight on Render
+    resp = jsonify({"ok": True})
+    resp.status_code = 200
+    return resp
 
 # Configuration
 API_BASE = "https://api.themoviedb.org/3"
