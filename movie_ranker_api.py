@@ -9,6 +9,7 @@ import csv
 import io
 import re
 from bs4 import BeautifulSoup
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
 app = Flask(__name__)
 # Enable CORS for all routes and origins - allow requests from localhost and any domain
@@ -576,42 +577,77 @@ class MovieRankingSession:
         failed_imports = []
         
         try:
-            # Fetch the Letterboxd page
+            # Prepare headers
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            response = requests.get(letterboxd_url, headers=headers, timeout=15)
-            response.raise_for_status()
-            
-            # Debug: Check if response contains film links
-            response_text = response.text
-            film_link_count = len(re.findall(r'/film/[^/"\'\s]+', response_text))
-            print(f"DEBUG: Found {film_link_count} /film/ links in raw HTML response")
-            
-            # Parse HTML
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Try to find embedded JSON data in script tags (Letterboxd often embeds data here)
-            script_tags = soup.find_all('script')
-            json_data = None
-            for script in script_tags:
-                if script.string:
-                    # Look for JSON-LD or window.__INITIAL_STATE__ or similar
-                    if 'window.__' in script.string or '__INITIAL_STATE__' in script.string or 'film' in script.string.lower():
-                        # Try to extract JSON
-                        json_match = re.search(r'\{[^{}]*"films?"[^{}]*\}', script.string)
-                        if json_match:
-                            try:
-                                import json
-                                json_data = json.loads(json_match.group())
-                                print(f"DEBUG: Found embedded JSON data")
-                            except:
-                                pass
-            
-            # Also check for data attributes or meta tags
-            meta_tags = soup.find_all('meta', property=re.compile(r'film|movie'))
-            if meta_tags:
-                print(f"DEBUG: Found {len(meta_tags)} film-related meta tags")
+
+            # Helper to construct URL with page param
+            def with_page(url: str, page_num: int) -> str:
+                parsed = urlparse(url)
+                q = parse_qs(parsed.query)
+                q['page'] = [str(page_num)]
+                new_query = urlencode(q, doseq=True)
+                return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+
+            # Iterate pages to collect all films
+            aggregated_film_items = []
+            page = 1
+            max_pages = 10  # safety cap
+            total_links_seen = 0
+
+            while page <= max_pages:
+                page_url = with_page(letterboxd_url, page)
+                response = requests.get(page_url, headers=headers, timeout=15)
+                if response.status_code != 200:
+                    print(f"DEBUG: Page {page} returned status {response.status_code}, stopping pagination")
+                    break
+                # Quick check if page has content
+                response_text = response.text
+                film_link_count = len(re.findall(r'/film/[^/\"\'\s]+', response_text))
+                print(f"DEBUG: Page {page} has {film_link_count} /film/ links")
+                if film_link_count == 0 and page > 1:
+                    # No more content
+                    break
+
+                soup = BeautifulSoup(response.content, 'html.parser')
+
+                # Try to find embedded JSON data in script tags (Letterboxd often embeds data here)
+                script_tags = soup.find_all('script')
+                for script in script_tags:
+                    if script.string and '/film/' in script.string:
+                        film_matches = re.findall(r'/film/([^/\"\'\s]+)', script.string)
+                        for slug in film_matches:
+                            aggregated_film_items.append({"slug": re.sub(r'-\d{4}$', '', slug), "href": f"/film/{slug}"})
+
+                # Strategy 1: film-list-item divs
+                page_items = soup.find_all('div', class_=lambda x: x and 'film-list-item' in ' '.join(x) if x else False)
+                if not page_items:
+                    # Strategy 1b: h2 film-title parents
+                    film_title_elems = soup.find_all('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
+                    if film_title_elems:
+                        page_items = [elem.find_parent(['div', 'li']) or elem for elem in film_title_elems]
+                # Strategy 2: li listitem/poster-container
+                if not page_items:
+                    page_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)) if x else False)
+                # Strategy 3: any li with link
+                if not page_items:
+                    all_li = soup.find_all('li')
+                    page_items = [li for li in all_li if li.find('a', href=re.compile(r'/film/'))]
+                # Strategy 4: poster divs
+                if not page_items:
+                    page_items = soup.find_all('div', class_=lambda x: x and ('poster' in ' '.join(x).lower() or 'listitem' in ' '.join(x).lower()) if x else False)
+                # Strategy 5: raw links on page
+                film_links = soup.find_all('a', href=re.compile(r'/film/'))
+                # aggregate
+                aggregated_film_items.extend(page_items if page_items else [])
+                aggregated_film_items.extend(film_links if film_links else [])
+
+                total_links_seen += film_link_count
+                # Heuristic: if no new links appear after first page, stop
+                if page > 1 and film_link_count == 0 and not page_items and not film_links:
+                    break
+                page += 1
             
             # Letterboxd list structure: movies are in various structures
             # According to Letterboxd structure: <div class="film-list-item"> with <h2 class="film-title">
@@ -621,62 +657,27 @@ class MovieRankingSession:
             
             film_items = []
             
-            # Strategy 1: Look for film-list-item divs (Grok's suggestion - most reliable)
-            film_items = soup.find_all('div', class_=lambda x: x and 'film-list-item' in ' '.join(x) if x else False)
-            
-            if not film_items:
-                # Strategy 1b: Look for h2 with film-title class
-                film_title_elems = soup.find_all('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
-                if film_title_elems:
-                    # Get parent containers
-                    film_items = [elem.find_parent(['div', 'li']) or elem for elem in film_title_elems]
-            
-            if not film_items:
-                # Strategy 2: Look for list items with poster containers (common for lists)
-                film_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)) if x else False)
-            
-            if not film_items:
-                # Strategy 3: Look for any <li> with a film link inside
-                all_li = soup.find_all('li')
-                film_items = [li for li in all_li if li.find('a', href=re.compile(r'/film/'))]
-            
-            if not film_items:
-                # Strategy 4: Look for divs with poster classes
-                film_items = soup.find_all('div', class_=lambda x: x and ('poster' in ' '.join(x).lower() or 'listitem' in ' '.join(x).lower()) if x else False)
-            
-            if not film_items:
-                # Strategy 4: Just find all links to /film/ pages and use their parent elements
-                film_links = soup.find_all('a', href=re.compile(r'/film/'))
-                film_items = [link.find_parent(['li', 'div']) or link for link in film_links]
+            # Use aggregated items from pagination
+            film_items = aggregated_film_items
             
             # Strategy 5: Check if content is in script tags (Letterboxd sometimes embeds JSON)
             if not film_items or len(film_items) < 5:
                 # Look for script tags with JSON data
-                script_tags = soup.find_all('script', type=re.compile(r'application/json|text/javascript'))
-                for script in script_tags:
-                    content = script.string
-                    if content and '/film/' in content:
-                        # Try to extract film links from JSON/JS
-                        film_matches = re.findall(r'/film/([^/"\']+)', content)
-                        if film_matches:
-                            print(f"Found {len(film_matches)} film slugs in script tags")
-                            # Create pseudo-items for these
-                            for slug in film_matches:
-                                # Remove year if present
-                                slug_clean = re.sub(r'-\d{4}$', '', slug)
-                                # Create a minimal item dict
-                                film_items.append({"slug": slug_clean, "href": f"/film/{slug}"})
+                # Already handled per-page above; keep as fallback using first page html if needed
+                pass
             
             # Strategy 6: Last resort - find ANY link with /film/ in href (most aggressive)
             if not film_items or len(film_items) < 5:
-                all_film_links = soup.find_all('a', href=re.compile(r'/film/'))
-                print(f"Strategy 6: Found {len(all_film_links)} total /film/ links in HTML")
+                # Fallback: nothing aggregated; try first page soup links (unlikely now)
+                all_film_links = film_links if 'film_links' in locals() else []
+                print(f"Strategy 6: Found {len(all_film_links)} total /film/ links in HTML (fallback)")
                 if all_film_links:
                     film_items = all_film_links
             
             # Strategy 7: Try regex extraction directly from response text as last resort
             if not film_items or len(film_items) < 5:
                 # Extract all unique film slugs from the raw HTML
+                # Attempt across all paged responses isn't stored, so rely on aggregated_film_items already
                 film_slugs = re.findall(r'/film/([^/"\'\s<>?&#]+)', response_text)
                 unique_slugs = list(set(film_slugs))
                 print(f"Strategy 7: Found {len(unique_slugs)} unique film slugs via regex")
@@ -685,7 +686,7 @@ class MovieRankingSession:
                     valid_slugs = [s for s in unique_slugs if len(s) > 3 and not s.startswith('css') and not s.startswith('http')]
                     print(f"Strategy 7: {len(valid_slugs)} valid slugs after filtering")
                     # Create pseudo-items from slugs
-                    for slug in valid_slugs[:100]:  # Limit to 100 to avoid too many
+                    for slug in valid_slugs:
                         film_items.append({"slug": slug, "href": f"/film/{slug}"})
             
             print(f"Found {len(film_items)} potential film items on Letterboxd page")
