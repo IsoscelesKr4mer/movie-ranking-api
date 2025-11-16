@@ -91,8 +91,51 @@ function extractTitlesFromHtml(html) {
 
   const items = [];
 
+  // FIX: Try ld+json ItemList first (most reliable for shared lists)
+  try {
+    const jsonScripts = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
+    for (const s of jsonScripts) {
+      try {
+        const data = JSON.parse(s.textContent || 'null');
+        if (data && data.itemListElement && Array.isArray(data.itemListElement)) {
+          data.itemListElement.forEach((el) => {
+            const it = el && (el.item || el.url || el.name);
+            if (!it) return;
+            let title = null;
+            let year = null;
+            if (typeof it === 'object') {
+              title = (it.name || it.headline || it.title || '').trim();
+              const date = it.datePublished || it.dateCreated || it.dateModified || '';
+              if (date) {
+                const m = String(date).match(/\b(19|20)\d{2}\b/);
+                if (m) year = m[0];
+              }
+              // Try URL slug for year
+              if (!year && it.url) {
+                const ym = String(it.url).match(/-(\d{4})\/?$/);
+                if (ym) year = ym[1];
+              }
+            } else if (typeof it === 'string') {
+              title = it.trim();
+              const ym = it.match(/-(\d{4})\/?$/);
+              if (ym) year = ym[1];
+            }
+            if (title && title.length >= 2) {
+              items.push({ title, year: year || null, rank: 0 });
+            }
+          });
+        }
+      } catch {}
+    }
+    if (items.length > 0) {
+      console.debug('[LB Parser] ld+json extracted', items.length);
+      items.forEach((it, idx) => { it.rank = idx + 1; });
+      return items;
+    }
+  } catch {}
+
   // Primary selectors per Letterboxd shared lists
-  const candidates = Array.from(doc.querySelectorAll('ul.film-list li, div[class*="film-list-item"], .poster-and-title'));
+  const candidates = Array.from(doc.querySelectorAll('ul.film-list li, li.film-list-entry, li.poster-container, div.film-list-item, div[class*="film-list-item"], .poster-and-title'));
   candidates.forEach(node => {
     const titleEl = node.querySelector('h2.film-title a, .film-title a, h2 a, .title a');
     let title = titleEl?.textContent?.trim() || '';
@@ -119,6 +162,16 @@ function extractTitlesFromHtml(html) {
 
     items.push({ title, year, rank: 0 });
   });
+
+  // FIX: data attributes used frequently on LB list entries
+  if (items.length === 0) {
+    const nodes = doc.querySelectorAll('[data-film-name]');
+    nodes.forEach(n => {
+      const t = n.getAttribute('data-film-name') || '';
+      const y = n.getAttribute('data-film-year') || n.getAttribute('data-film-release-year') || null;
+      if (t && t.trim().length >= 2) items.push({ title: t.trim(), year: y ? String(y).match(/\b(19|20)\d{2}\b/)?.[0] || null : null, rank: 0 });
+    });
+  }
 
   // Fallback A: grid/poster lists with .film-poster and title attribute or alt
   if (items.length === 0) {
@@ -165,7 +218,7 @@ function extractTitlesFromHtml(html) {
 function getNextPageUrl(html, baseUrl) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-  const next = doc.querySelector('a.next, a[rel="next"]');
+  const next = doc.querySelector('a.next, a[rel="next"], .pagination-next a');
   if (next && next.getAttribute('href')) {
     const href = next.getAttribute('href');
     try {
