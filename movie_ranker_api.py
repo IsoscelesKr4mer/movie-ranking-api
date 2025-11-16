@@ -622,11 +622,22 @@ class MovieRankingSession:
                 new_query = urlencode(q, doseq=True)
                 return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
 
-            # Iterate pages to collect all films
+            # Determine default year from URL (e.g., best-of-2025)
+            default_year = None
+            m_year = re.search(r'best\-of\-(\d{4})', letterboxd_url)
+            if m_year:
+                try:
+                    default_year = int(m_year.group(1))
+                    print(f"DEBUG: Default year inferred from URL: {default_year}")
+                except ValueError:
+                    default_year = None
+
+            # Iterate pages to collect all films and raw titles
             aggregated_film_items = []
             page = 1
             max_pages = 10  # safety cap
             total_links_seen = 0
+            raw_titles = set()
 
             while page <= max_pages:
                 page_url = with_page(letterboxd_url, page)
@@ -659,6 +670,11 @@ class MovieRankingSession:
                     film_title_elems = soup.find_all('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
                     if film_title_elems:
                         page_items = [elem.find_parent(['div', 'li']) or elem for elem in film_title_elems]
+                        # Collect raw titles directly to avoid missing very short titles like "F1"
+                        for elem in film_title_elems:
+                            t = elem.get_text(strip=True)
+                            if t:
+                                raw_titles.add(self._normalize_title(t))
                 # Strategy 2: li listitem/poster-container
                 if not page_items:
                     page_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)) if x else False)
@@ -853,8 +869,19 @@ class MovieRankingSession:
                     title_key = f"{title.lower()}-{year}" if year else title.lower()
                     if title_key not in seen_titles:
                         seen_titles.add(title_key)
-                        movies_to_search.append({"title": title, "year": year})
+                        # Apply default year from list when year is missing
+                        use_year = year if year else default_year
+                        movies_to_search.append({"title": title, "year": use_year})
                         print(f"  Found: {title} ({year or 'no year'})")
+
+            # Ensure any raw titles collected from h2.film-title are included (covers short titles like "F1")
+            for rt in raw_titles:
+                if not rt or len(rt) < 1:
+                    continue
+                rt_key = rt.lower()
+                if not any((m['title'].lower() == rt_key) for m in movies_to_search):
+                    movies_to_search.append({"title": rt, "year": default_year})
+                    print(f"  Added from raw h2: {rt} ({default_year or 'no year'})")
             
             print(f"Extracted {len(movies_to_search)} unique movies from Letterboxd")
             
