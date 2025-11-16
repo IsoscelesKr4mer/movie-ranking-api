@@ -56,7 +56,8 @@
    * @param {Array<any>} movies
    */
   async function importToSession(movies, parsed) {
-    const matched = movies.filter(m => m.matched && m.id);
+    // Only keep TMDb matches that either have no requested year or match the requested year
+    const matched = movies.filter(m => m.matched && m.id && (!m.requested_year || m.year_match));
     // Build fallbacks using original parsed items
     const fallbacks = [];
     movies.forEach((m, idx) => {
