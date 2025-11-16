@@ -79,15 +79,23 @@
     document.getElementById('session-info').classList.remove('hidden');
     document.getElementById('session-status').textContent = 'Session created';
 
-    // Set movies for session (support mixed: tmdb matches + fallbacks with poster)
-    let setResp;
-    if (fallbacks.length > 0) {
-      const payload = { tmdb_ids: matched.map(m => m.id), fallbacks };
-      setResp = await apiCall(`/api/session/${window.sessionId}/movies/set_mixed`, 'POST', payload);
-    } else {
-      const payload = { tmdb_ids: matched.map(m => m.id) };
-      setResp = await apiCall(`/api/session/${window.sessionId}/movies/set`, 'POST', payload);
-    }
+    // Build a single ordered list preserving the original ranks:
+    // for each parsed index, if we have an acceptable TMDb match at that index, keep its id;
+    // otherwise send a fallback with LB title/year/poster so order is preserved.
+    const orderedItems = parsed.items.map((p, idx) => {
+      const m = movies[idx];
+      const isGoodMatch = m && m.matched && m.id && (!m.requested_year || m.year_match);
+      if (isGoodMatch) {
+        return { id: m.id };
+      }
+      return { title: p.title, year: p.year || null, poster_url: p.poster_url || null };
+    });
+
+    const setResp = await apiCall(
+      `/api/session/${window.sessionId}/movies/set_bulk`,
+      'POST',
+      { items: orderedItems }
+    );
     addMessage(`Imported ${setResp.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
 
     // Display for selection (reuse app.js helper)

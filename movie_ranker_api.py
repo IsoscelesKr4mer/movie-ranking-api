@@ -1,11 +1,13 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
 import os
+import zlib
 from typing import List, Dict, Optional
 import uuid
 from datetime import datetime, timedelta
 import re
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 # Enable CORS for all routes and origins - allow requests from localhost and any domain
@@ -1046,6 +1048,63 @@ def set_movies_mixed(session_id: str):
     except Exception as e:
         return jsonify({"error": f"Failed to set mixed movies: {str(e)}"}), 500
 
+
+@app.route('/api/session/<session_id>/movies/set_bulk', methods=['POST'])
+def set_movies_bulk(session_id: str):
+    """
+    Set the session's movies in the exact parsed order.
+    Body: { "items": [ { "id": <int optional>, "title": <str optional>, "year": <str|int|null>, "poster_url": <str|null> } ] }
+    If 'id' is present and valid, fetch TMDb details; otherwise create a placeholder using provided title/year/poster_url.
+    """
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+
+    data = request.get_json() or {}
+    items = data.get('items', [])
+    if not isinstance(items, list):
+        return jsonify({"error": "items must be a list"}), 400
+
+    if len(items) > 200:
+        items = items[:200]
+
+    result = []
+    try:
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            tmdb_id = it.get('id', None)
+            if isinstance(tmdb_id, int):
+                movie = sessions[session_id]._get_movie_details(tmdb_id)
+                if movie:
+                    result.append(movie)
+                    continue
+            title = str(it.get('fTitle') or it.get('title') or '').strip()
+            year = it.get('year')
+            poster_url = str(it.get('poster_url') or '').strip()
+            if not title:
+                continue
+            placeholder_id = -int(zlib.crc32(title.encode('utf-8')))
+            result.append({
+                "id": placeholder_id,
+                "title": title,
+                "poster_path": "",
+                "poster_url": poster_url,
+                "release_date": f"{year}-01-01" if year and str(year).isdigit() and len(str(year)) == 4 else "",
+                "vote_average": 0,
+                "overview": ""
+            })
+
+        session = sessions[session_id]
+        session.movies = result
+        session.selected_movies = []
+        return jsonify({
+            "message": f"Loaded {len(result)} movies in parsed order",
+            "loaded_count": len(result),
+            "movies": result
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to set movies (bulk): {str(e)}"}), 500
+
 @app.route('/api/tmdb/enrich', methods=['POST'])
 def tmdb_enrich_titles():
     """Enrich titles via TMDb using the server's API key.
@@ -1116,7 +1175,7 @@ def proxy_fetch_letterboxd():
     if not url:
         return jsonify({"error": "Missing 'url'"}), 400
     try:
-        parsed = requests.utils.urlparse(url)
+        parsed = urlparse(url)
         host = (parsed.netloc or '').lower()
         if not (host.endswith('letterboxd.com') or host.endswith('boxd.it')):
             return jsonify({"error": "Only letterboxd.com or boxd.it URLs are allowed"}), 400
