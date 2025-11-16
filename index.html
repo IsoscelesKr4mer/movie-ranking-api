@@ -48,11 +48,12 @@
                 
                 <div class="form-group">
                     <label for="letterboxd-url">Import Letterboxd List (URL):</label>
-                    <input type="text" id="letterboxd-url" placeholder="https://boxd.it/..." style="margin-bottom: 10px; width: 100%; padding: 8px;">
-                    <button id="import-letterboxd-btn" class="btn btn-secondary">Import & Load Letterboxd List</button>
+                    <input type="text" id="letterboxd-url" placeholder="https://letterboxd.com/.../share/..." style="margin-bottom: 10px; width: 100%; padding: 8px;">
+                    <button id="import-letterboxd-btn" class="btn btn-secondary">Parse & Import Letterboxd List</button>
                     <small style="display: block; margin-top: 5px; color: #666;">
-                        Paste a Letterboxd list URL (e.g., https://boxd.it/...) to import and rank those movies
+                        Public lists only. Any share link works. We'll match titles via TMDb and keep list order.
                     </small>
+                    <div id="lb-import-status" style="margin-top:8px; color:#555;"></div>
                 </div>
             </div>
             <div id="session-info" class="session-info hidden">
@@ -142,6 +143,9 @@
         <div id="messages"></div>
     </div>
 
+    <script src="parseLetterboxd.js"></script>
+    <script src="tmdbService.js"></script>
+    <script src="letterboxdImporter.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

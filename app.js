@@ -190,7 +190,7 @@ async function createSessionAndLoadMovies() {
     }
 }
 
-// Import Letterboxd List
+// Import Letterboxd List (client-side parsing + TMDb enrichment)
 async function importLetterboxdList() {
     try {
         const letterboxdUrl = letterboxdUrlInput.value.trim();
@@ -198,42 +198,32 @@ async function importLetterboxdList() {
             showMessage('Please enter a Letterboxd list URL', 'error');
             return;
         }
-
-        // Validate URL format
         if (!letterboxdUrl.match(/^https?:\/\/(www\.)?(letterboxd\.com|boxd\.it)/)) {
             showMessage('Please enter a valid Letterboxd URL (letterboxd.com or boxd.it)', 'error');
             return;
         }
 
         showLoading(true);
-        showMessage('Creating session...', 'info');
+        showMessage('Parsing and importing Letterboxd list...', 'info');
 
-        // Create session first
-        const sessionData = await apiCall('/api/session/create', 'POST');
-        sessionId = sessionData.session_id;
-        sessionIdSpan.textContent = sessionId;
-        sessionInfo.classList.remove('hidden');
-        sessionStatusSpan.textContent = 'Session created';
+        // Use public TMDb API key from server-side configuration fallback file/env if available
+        // Since this is a static client, ask for a key once if not configured.
+        // For this app, we derive the API key from server via categories pre-load fallback path,
+        // but since not exposed, require the user to set TMDb key below if needed.
+        const tmdbKey = (window.TMDB_PUBLIC_KEY) || (window.localStorage.getItem('TMDB_PUBLIC_KEY') || '');
+        if (!tmdbKey) {
+            const entered = prompt('Enter your TMDb API key to enrich titles:');
+            if (!entered) throw new Error('TMDb API key required to import.');
+            window.localStorage.setItem('TMDB_PUBLIC_KEY', entered);
+        }
+        const apiKey = window.localStorage.getItem('TMDB_PUBLIC_KEY');
 
-        showMessage('Session created! Fetching and importing Letterboxd list...', 'info');
+        await window.runLetterboxdImport(letterboxdUrl, apiKey);
 
-        // Import from URL
-        const importData = await apiCall(
-            `/api/session/${sessionId}/movies/import`,
-            'POST',
-            { letterboxd_url: letterboxdUrl }
-        );
-
-        loadedMovies = importData.movies || [];
-        sessionStatusSpan.textContent = `Imported ${importData.loaded_count} movies`;
-        
-        // Show selection section
-        selectionSection.classList.remove('hidden');
-        displayMoviesForSelection(loadedMovies);
+        // After importToSession completes, we should have loadedMovies populated from server
         selectedMovieIds.clear();
         updateSelectedCount();
-        
-        showMessage(`Imported ${importData.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
+        sessionStatusSpan.textContent = `Imported ${loadedMovies.length} movies`;
         showLoading(false);
 
     } catch (error) {

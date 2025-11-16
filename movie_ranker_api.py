@@ -5,12 +5,7 @@ import os
 from typing import List, Dict, Optional
 import uuid
 from datetime import datetime, timedelta
-import csv
-import io
 import re
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-import zlib
 
 app = Flask(__name__)
 # Enable CORS for all routes and origins - allow requests from localhost and any domain
@@ -133,18 +128,7 @@ class MovieRankingSession:
         self.current_comparison: Optional[Dict] = None
         self.created_at = datetime.now()
     
-    def _normalize_title(self, raw_title: str) -> str:
-        """Normalize a movie title by removing trailing year markers and extra symbols"""
-        if not raw_title:
-            return raw_title
-        title = raw_title.strip()
-        # Remove trailing "(YYYY)" or "[YYYY]" or " YYYY"
-        title = re.sub(r"\s*[\(\[\{]\s*\d{4}\s*[\)\]\}]\s*$", "", title)
-        title = re.sub(r"\s+\d{4}\s*$", "", title)
-        # Collapse whitespace and remove common noise characters
-        title = re.sub(r"[\u2013\u2014\-–—:*•]+", " ", title)  # various dashes, asterisks, bullets
-        title = re.sub(r"\s{2,}", " ", title).strip()
-        return title
+    # Letterboxd integration removed; keeping backend focused on TMDb categories/years only.
     
     def load_movies(self, year: int = None, max_movies: int = 50, category: str = None):
         """Load movies from TMDb API by year or category"""
@@ -555,396 +539,11 @@ class MovieRankingSession:
             print(f"Error getting movie details for ID {movie_id}: {e}")
             return None
     
-    def import_letterboxd_csv(self, csv_content: str) -> int:
-        """Import movies from a Letterboxd CSV file"""
-        if not API_KEY:
-            raise ValueError("TMDb API key not configured")
-        
-        imported_movies = []
-        failed_imports = []
-        
-        # Parse CSV content
-        csv_file = io.StringIO(csv_content)
-        
-        # Letterboxd CSV format: Name,Year,URL (and potentially other columns)
-        # Handle both with and without header row
-        reader = csv.DictReader(csv_file)
-        
-        for row in reader:
-            # Letterboxd uses "Name" for title, sometimes "Title"
-            title = row.get("Name") or row.get("Title") or row.get("name") or row.get("title")
-            year_str = row.get("Year") or row.get("year")
-            
-            if not title:
-                continue
-            
-            # Parse year (handle empty strings, non-numeric values)
-            year = None
-            if year_str:
-                try:
-                    year = int(year_str.strip())
-                except (ValueError, AttributeError):
-                    pass
-            
-            # Search for movie in TMDb
-            movie = self._search_movie_tmdb(title, year)
-            
-            if movie:
-                # Check for duplicates
-                if not any(m.get("id") == movie.get("id") for m in imported_movies):
-                    imported_movies.append(movie)
-            else:
-                failed_imports.append({"title": title, "year": year})
-        
-        # Sort by release date
-        imported_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
-        
-        # Store imported movies
-        self.movies = imported_movies
-        
-        if failed_imports:
-            print(f"Failed to import {len(failed_imports)} movies: {failed_imports[:5]}...")
-        
-        return len(imported_movies)
+    # Letterboxd CSV import removed
     
     def import_letterboxd_url(self, letterboxd_url: str) -> int:
-        """Import movies from a Letterboxd list URL"""
-        if not API_KEY:
-            raise ValueError("TMDb API key not configured")
-        
-        imported_movies = []
-        failed_imports = []
-        
-        try:
-            # Prepare headers
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-
-            # Helper to construct URL with page param
-            def with_page(url: str, page_num: int) -> str:
-                parsed = urlparse(url)
-                q = parse_qs(parsed.query)
-                q['page'] = [str(page_num)]
-                new_query = urlencode(q, doseq=True)
-                return urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
-
-            # Determine default year from URL (e.g., best-of-2025)
-            default_year = None
-            m_year = re.search(r'best\-of\-(\d{4})', letterboxd_url)
-            if m_year:
-                try:
-                    default_year = int(m_year.group(1))
-                    print(f"DEBUG: Default year inferred from URL: {default_year}")
-                except ValueError:
-                    default_year = None
-
-            # Iterate pages to collect all films and raw titles
-            aggregated_film_items = []
-            page = 1
-            max_pages = 10  # safety cap
-            total_links_seen = 0
-            raw_titles = set()
-
-            while page <= max_pages:
-                page_url = with_page(letterboxd_url, page)
-                response = requests.get(page_url, headers=headers, timeout=15)
-                if response.status_code != 200:
-                    print(f"DEBUG: Page {page} returned status {response.status_code}, stopping pagination")
-                    break
-                # Quick check if page has content
-                response_text = response.text
-                film_link_count = len(re.findall(r'/film/[^/\"\'\s]+', response_text))
-                print(f"DEBUG: Page {page} has {film_link_count} /film/ links")
-                if film_link_count == 0 and page > 1:
-                    # No more content
-                    break
-
-                soup = BeautifulSoup(response.content, 'html.parser')
-
-                # Try to find embedded JSON data in script tags (Letterboxd often embeds data here)
-                script_tags = soup.find_all('script')
-                for script in script_tags:
-                    if script.string and '/film/' in script.string:
-                        film_matches = re.findall(r'/film/([^/\"\'\s]+)', script.string)
-                        for slug in film_matches:
-                            aggregated_film_items.append({"slug": re.sub(r'-\d{4}$', '', slug), "href": f"/film/{slug}"})
-
-                # Strategy 1: film-list-item divs
-                page_items = soup.find_all('div', class_=lambda x: x and 'film-list-item' in ' '.join(x) if x else False)
-                if not page_items:
-                    # Strategy 1b: h2 film-title parents
-                    film_title_elems = soup.find_all('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
-                    if film_title_elems:
-                        page_items = [elem.find_parent(['div', 'li']) or elem for elem in film_title_elems]
-                        # Collect raw titles directly to avoid missing very short titles like "F1"
-                        for elem in film_title_elems:
-                            t = elem.get_text(strip=True)
-                            if t:
-                                raw_titles.add(self._normalize_title(t))
-                # Strategy 2: li listitem/poster-container
-                if not page_items:
-                    page_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)) if x else False)
-                # Strategy 3: any li with link
-                if not page_items:
-                    all_li = soup.find_all('li')
-                    page_items = [li for li in all_li if li.find('a', href=re.compile(r'/film/'))]
-                # Strategy 4: poster divs
-                if not page_items:
-                    page_items = soup.find_all('div', class_=lambda x: x and ('poster' in ' '.join(x).lower() or 'listitem' in ' '.join(x).lower()) if x else False)
-                # Strategy 5: raw links on page
-                film_links = soup.find_all('a', href=re.compile(r'/film/'))
-                # aggregate
-                aggregated_film_items.extend(page_items if page_items else [])
-                aggregated_film_items.extend(film_links if film_links else [])
-
-                total_links_seen += film_link_count
-                # Heuristic: if no new links appear after first page, stop
-                if page > 1 and film_link_count == 0 and not page_items and not film_links:
-                    break
-                page += 1
-            
-            # Letterboxd list structure: movies are in various structures
-            # According to Letterboxd structure: <div class="film-list-item"> with <h2 class="film-title">
-            # Or <li> elements with class "listitem" or "poster-container"
-            # Each contains an <a> tag with href="/film/..." and data-film-slug
-            # Try multiple strategies to find film items
-            
-            film_items = []
-            
-            # Use aggregated items from pagination
-            film_items = aggregated_film_items
-            
-            # Strategy 5: Check if content is in script tags (Letterboxd sometimes embeds JSON)
-            if not film_items or len(film_items) < 5:
-                # Look for script tags with JSON data
-                # Already handled per-page above; keep as fallback using first page html if needed
-                pass
-            
-            # Strategy 6: Last resort - find ANY link with /film/ in href (most aggressive)
-            if not film_items or len(film_items) < 5:
-                # Fallback: nothing aggregated; try first page soup links (unlikely now)
-                all_film_links = film_links if 'film_links' in locals() else []
-                print(f"Strategy 6: Found {len(all_film_links)} total /film/ links in HTML (fallback)")
-                if all_film_links:
-                    film_items = all_film_links
-            
-            # Strategy 7: Try regex extraction directly from response text as last resort
-            if not film_items or len(film_items) < 5:
-                # Extract all unique film slugs from the raw HTML
-                # Attempt across all paged responses isn't stored, so rely on aggregated_film_items already
-                film_slugs = re.findall(r'/film/([^/"\'\s<>?&#]+)', response_text)
-                unique_slugs = list(set(film_slugs))
-                print(f"Strategy 7: Found {len(unique_slugs)} unique film slugs via regex")
-                if unique_slugs:
-                    # Filter out obviously wrong matches (like CSS classes, etc.)
-                    valid_slugs = [s for s in unique_slugs if len(s) > 3 and not s.startswith('css') and not s.startswith('http')]
-                    print(f"Strategy 7: {len(valid_slugs)} valid slugs after filtering")
-                    # Create pseudo-items from slugs
-                    for slug in valid_slugs:
-                        film_items.append({"slug": slug, "href": f"/film/{slug}"})
-            
-            print(f"Found {len(film_items)} potential film items on Letterboxd page")
-            
-            # Debug: Print first few items for troubleshooting
-            if film_items:
-                print(f"DEBUG: First 3 items: {[str(item)[:100] for item in film_items[:3]]}")
-            
-            # Extract movie titles and years
-            movies_to_search = []
-            seen_titles = set()
-            
-            for item in film_items:
-                # Try to extract title and year from various possible structures
-                title = None
-                year = None
-
-                # If this is a dict (from script/regex extraction), handle separately and continue
-                if isinstance(item, dict):
-                    href = item.get('href', '')
-                    slug = item.get('slug', '')
-                    if slug:
-                        title = self._normalize_title(slug.replace('-', ' ').replace('_', ' ').title())
-                    if href and not title:
-                        match = re.search(r'/film/([^/?#]+)', href)
-                        if match:
-                            title_slug = match.group(1)
-                            ym = re.search(r'-(\d{4})$', title_slug)
-                            if ym:
-                                year = int(ym.group(1))
-                                title_slug = title_slug[:-5]
-                            title = self._normalize_title(title_slug.replace('-', ' ').replace('_', ' ').title())
-                    if not year and href:
-                        ym2 = re.search(r'-(\d{4})', href)
-                        if ym2:
-                            year = int(ym2.group(1))
-                    if title:
-                        title = self._normalize_title(title)
-                        if len(title) >= 2:
-                            title_key = f"{title.lower()}-{year}" if year else title.lower()
-                            if title_key not in seen_titles:
-                                seen_titles.add(title_key)
-                                movies_to_search.append({"title": title, "year": year})
-                                print(f"  Found (dict): {title} ({year or 'no year'})")
-                    continue
-
-                # Handle BeautifulSoup Tag objects
-                # First, find the film link (most reliable source)
-                link = None
-                if hasattr(item, 'get') and getattr(item, 'name', None) == 'a':
-                    if item.get('href') and '/film/' in item.get('href', ''):
-                        link = item
-                elif hasattr(item, 'find'):
-                    link = item.find('a', href=re.compile(r'/film/'))
-
-                # Extract from link href (format: /film/film-name-year/ or /film/film-name/)
-                if link:
-                    href = link.get('href', '')
-                    match = re.search(r'/film/([^/?#]+)', href)
-                    if match:
-                        title_slug = match.group(1)
-                        ym = re.search(r'-(\d{4})$', title_slug)
-                        if ym:
-                            year = int(ym.group(1))
-                            title_slug = title_slug[:-5]
-                        title = self._normalize_title(title_slug.replace('-', ' ').replace('_', ' ').title())
-
-                # Method 1: h2.film-title
-                if not title and hasattr(item, 'find'):
-                    title_elem = item.find('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
-                    if title_elem:
-                        title = title_elem.get_text(strip=True)
-
-                # Method 1b: any element with film-title/film-name/title
-                if not title and hasattr(item, 'find'):
-                    title_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-title', 'film-name', 'title']) if x else False)
-                    if title_elem:
-                        title = title_elem.get_text(strip=True)
-
-                # Method 2: data attributes
-                if not title and hasattr(item, 'get'):
-                    title = (item.get('data-film-name') or 
-                             item.get('data-film-title') or
-                             (link and link.get('data-film-name')) or
-                             (link and link.get('data-film-title')))
-
-                # Method 3: img alt attribute
-                if not title and hasattr(item, 'find'):
-                    img = item.find('img')
-                    if img:
-                        alt_text = img.get('alt', '')
-                        if alt_text and alt_text.strip():
-                            title = self._normalize_title(alt_text.strip())
-
-                # Extract year from various sources
-                if not year and hasattr(item, 'find'):
-                    year_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-year', 'year', 'release-year']))
-                    if year_elem:
-                        year_text = year_elem.get_text(strip=True)
-                        ym = re.search(r'\d{4}', year_text)
-                        if ym:
-                            year = int(ym.group())
-
-                if not year and hasattr(item, 'get'):
-                    year_text = (item.get('data-film-year') or 
-                                 item.get('data-film-release-year') or
-                                 (link and link.get('data-film-year')) or
-                                 (link and link.get('data-film-release-year')))
-                    if year_text:
-                        ym = re.search(r'\d{4}', str(year_text))
-                        if ym:
-                            year = int(ym.group())
-
-                # Year from title text
-                if not year and title:
-                    ym = re.search(r'\s*\((\d{4})\)', title)
-                    if ym:
-                        year = int(ym.group(1))
-                        title = re.sub(r'\s*\(\d{4}\)', '', title).strip()
-
-                # Year at end of title
-                if not year and title:
-                    ym = re.search(r'\s+(\d{4})\s*$', title)
-                    if ym:
-                        year = int(ym.group(1))
-                        title = title[:-5].strip()
-
-                if title:
-                    title = self._normalize_title(title)
-                    if len(title) < 2:
-                        continue
-                    title_key = f"{title.lower()}-{year}" if year else title.lower()
-                    if title_key not in seen_titles:
-                        seen_titles.add(title_key)
-                        # Apply default year from list when year is missing
-                        use_year = year if year else default_year
-                        movies_to_search.append({"title": title, "year": use_year})
-                        print(f"  Found: {title} ({year or 'no year'})")
-
-            # Ensure any raw titles collected from h2.film-title are included (covers short titles like "F1")
-            for rt in raw_titles:
-                if not rt or len(rt) < 1:
-                    continue
-                rt_key = rt.lower()
-                if not any((m['title'].lower() == rt_key) for m in movies_to_search):
-                    movies_to_search.append({"title": rt, "year": default_year})
-                    print(f"  Added from raw h2: {rt} ({default_year or 'no year'})")
-            
-            print(f"Extracted {len(movies_to_search)} unique movies from Letterboxd")
-            
-            # Search for each movie in TMDb
-            for movie_info in movies_to_search:
-                title = movie_info["title"]
-                year = movie_info.get("year")
-                
-                movie = self._search_movie_tmdb(title, year)
-                
-                if movie:
-                    # Check for duplicates by TMDb ID
-                    if not any(m.get("id") == movie.get("id") for m in imported_movies):
-                        imported_movies.append(movie)
-                else:
-                    failed_imports.append({"title": title, "year": year})
-            
-            # Sort by release date
-            imported_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
-            
-            # Store imported movies
-            # If some titles could not be matched in TMDb, create placeholder entries so users can still rank
-            if failed_imports:
-                print(f"Creating placeholders for {len(failed_imports)} unmatched titles")
-                for fi in failed_imports:
-                    title = fi.get("title")
-                    yr = fi.get("year")
-                    if not title:
-                        continue
-                    title = self._normalize_title(title)
-                    # Stable negative ID based on CRC32 of title
-                    placeholder_id = -int(zlib.crc32(title.encode("utf-8")))
-                    placeholder = {
-                        "id": placeholder_id,
-                        "title": title,
-                        "poster_path": "",
-                        "poster_url": "",
-                        "release_date": f"{yr}-01-01" if isinstance(yr, int) else "",
-                        "vote_average": 0,
-                        "overview": ""
-                    }
-                    # Avoid duplicates if a real movie with same title already added
-                    if not any(m.get("title", "").lower() == title.lower() for m in imported_movies):
-                        imported_movies.append(placeholder)
-
-            self.movies = imported_movies
-            
-            if failed_imports:
-                print(f"Failed to import {len(failed_imports)} movies: {failed_imports[:5]}...")
-            
-            return len(imported_movies)
-            
-        except requests.RequestException as e:
-            raise ValueError(f"Failed to fetch Letterboxd page: {str(e)}")
-        except Exception as e:
-            raise ValueError(f"Failed to parse Letterboxd page: {str(e)}")
+        """Deprecated. Letterboxd import removed from backend; use client-side parser."""
+        raise ValueError("Letterboxd import is no longer supported on the server. Use client-side import.")
     
     def select_movies(self, movie_ids: List[int]):
         """Select movies that the user has seen (by their TMDb IDs)"""
@@ -1259,6 +858,37 @@ def load_movies(session_id: str):
         return jsonify({"error": f"Failed to load movies: {str(e)}"}), 500
 
 
+@app.route('/api/session/<session_id>/movies/set', methods=['POST'])
+def set_movies(session_id: str):
+    """Set the session's movies directly from a list of TMDb IDs (client-side imports)."""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+
+    data = request.get_json() or {}
+    tmdb_ids = data.get('tmdb_ids', [])
+    if not isinstance(tmdb_ids, list) or not all(isinstance(i, int) for i in tmdb_ids):
+        return jsonify({"error": "tmdb_ids must be a list of integers"}), 400
+
+    if len(tmdb_ids) == 0:
+        return jsonify({"error": "tmdb_ids is empty"}), 400
+
+    if len(tmdb_ids) > 200:
+        tmdb_ids = tmdb_ids[:200]  # hard cap to avoid overload
+
+    try:
+        session = sessions[session_id]
+        movies = session._load_movies_by_ids(tmdb_ids)
+        session.movies = movies
+        session.selected_movies = []  # reset any prior selection
+        return jsonify({
+            "message": f"Loaded {len(movies)} movies from TMDb IDs",
+            "loaded_count": len(movies),
+            "movies": movies
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to set movies: {str(e)}"}), 500
+
+
 @app.route('/api/session/<session_id>/movies/select', methods=['POST'])
 def select_movies(session_id: str):
     """Select movies that the user has seen"""
@@ -1286,76 +916,7 @@ def select_movies(session_id: str):
         return jsonify({"error": f"Failed to select movies: {str(e)}"}), 500
 
 
-@app.route('/api/session/<session_id>/movies/import', methods=['POST'])
-def import_letterboxd(session_id: str):
-    """Import movies from a Letterboxd URL or CSV file"""
-    if session_id not in sessions:
-        return jsonify({"error": "Session not found"}), 404
-    
-    data = request.get_json() or {}
-    letterboxd_url = data.get('letterboxd_url') or data.get('url')
-    
-    # Check if URL is provided
-    if letterboxd_url:
-        try:
-            session = sessions[session_id]
-            count = session.import_letterboxd_url(letterboxd_url)
-            
-            return jsonify({
-                "message": f"Imported {count} movies from Letterboxd",
-                "movie_count": count,
-                "loaded_count": count,
-                "movies": session.movies
-            }), 200
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
-        except Exception as e:
-            return jsonify({"error": f"Failed to import Letterboxd URL: {str(e)}"}), 500
-    
-    # Fall back to CSV file upload
-    if 'file' in request.files:
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
-        
-        # Read file content
-        csv_content = file.read().decode('utf-8')
-        
-        try:
-            session = sessions[session_id]
-            count = session.import_letterboxd_csv(csv_content)
-            
-            return jsonify({
-                "message": f"Imported {count} movies from Letterboxd CSV",
-                "movie_count": count,
-                "loaded_count": count,
-                "movies": session.movies
-            }), 200
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
-        except Exception as e:
-            return jsonify({"error": f"Failed to import Letterboxd CSV: {str(e)}"}), 500
-    
-    # Check for CSV content in JSON
-    if request.is_json:
-        csv_content = data.get('csv_content', '')
-        if csv_content:
-            try:
-                session = sessions[session_id]
-                count = session.import_letterboxd_csv(csv_content)
-                
-                return jsonify({
-                    "message": f"Imported {count} movies from Letterboxd CSV",
-                    "movie_count": count,
-                    "loaded_count": count,
-                    "movies": session.movies
-                }), 200
-            except ValueError as e:
-                return jsonify({"error": str(e)}), 400
-            except Exception as e:
-                return jsonify({"error": f"Failed to import Letterboxd CSV: {str(e)}"}), 500
-    
-    return jsonify({"error": "No Letterboxd URL, CSV file, or CSV content provided"}), 400
+# Letterboxd import endpoint removed
 
 
 @app.route('/api/session/<session_id>/ranking/start', methods=['POST'])
