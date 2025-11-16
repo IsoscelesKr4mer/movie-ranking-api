@@ -161,9 +161,9 @@ function extractTitlesFromHtml(html) {
       const m = title.match(/\b(19|20)\d{2}\b/);
       if (m) {
         year = m[0];
-        // Keep original title text including symbols like * or ²
-        title = title;
       }
+      // FIX: strip trailing " (YYYY)" from title; preserve year separately
+      title = title.replace(/\s*\(\d{4}\)\s*$/, '').trim();
     }
     if (!year && slug) {
       const y2 = String(slug).match(/-(\d{4})(?:\/|$)/);
@@ -203,6 +203,8 @@ function extractTitlesFromHtml(html) {
     if (lower.includes('tv series') || lower.includes('(tv)') || lower.includes('(short)') || title.length < 3) {
       return;
     }
+    // Remove trailing year from title if present to avoid duplication with separate year label
+    title = title.replace(/\s*\(\d{4}\)\s*$/, '').trim();
 
     items.push({ title, year, poster_url, rank: 0 });
   });

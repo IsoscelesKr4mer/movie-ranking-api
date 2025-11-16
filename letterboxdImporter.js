@@ -128,7 +128,19 @@
       // Send title + year for precise matching
       const payloadItems = parsed.items.map(it => ({ title: it.title, year: it.year || null }));
       const enrichResp = await apiCall('/api/tmdb/enrich', 'POST', { items: payloadItems });
-      const enriched = enrichResp.items || [];
+      let enriched = (enrichResp.items || []).map((m, idx) => {
+        const p = parsed.items[idx] || {};
+        // Merge in LB poster for unmatched, and ensure title doesn't duplicate year
+        const cleanTitle = (m.matched ? (m.title || '') : (p.title || m.title || '')).replace(/\s*\(\d{4}\)\s*$/, '').trim();
+        const reqYear = p.year || m.requested_year || null;
+        const poster = m.poster_url || p.poster_url || null;
+        return {
+          ...m,
+          title: cleanTitle,
+          requested_year: reqYear,
+          poster_url: poster
+        };
+      });
 
       // Display preview with checkmarks
       renderPreview(enriched);
