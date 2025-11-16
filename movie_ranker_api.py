@@ -95,13 +95,14 @@ MOVIE_CATEGORIES = {
     "matrix": {
         "name": "The Matrix",
         "description": "The Matrix franchise",
-        "collection_id": 469,  # The Matrix Collection
+        # FIX: Correct TMDb collection ID for The Matrix Collection (was 469 by mistake)
+        "collection_id": 234,  # The Matrix Collection
         "movie_ids": None
     },
     "xmen": {
         "name": "X-Men Films",
         "description": "X-Men movie franchise",
-        "collection_id": 263,  # X-Men Collection
+        # FIX: Correct TMDb collection ID for X‑Men film series\n        # TMDb \"X-Men Collection\" is 748 (includes the main X‑Men films)\n        \"collection_id\": 748,\n        # No curated IDs; rely on collection first, then fallback logic if needed\n",
         "movie_ids": None
     }
 }
