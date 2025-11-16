@@ -195,12 +195,19 @@ class MovieRankingSession:
         return len(self.movies)
     
     def _load_movies_from_category(self, category: str, max_movies: int = 50):
-        """Load movies from a curated category"""
+        """Load movies from a curated category.
+        Strategy:
+          1) Try keyword/company paths when defined (MCU/Pixar).
+          2) Merge any collection_ids (if provided) into a single list.
+          3) Merge single collection_id (if provided).
+          4) Merge curated movie_ids (always as a safety net).
+          Finally dedupe by TMDb ID, sort by release_date, and cap to max_movies.
+        """
         if category not in MOVIE_CATEGORIES:
             raise ValueError(f"Unknown category: {category}")
         
         cat_info = MOVIE_CATEGORIES[category]
-        movies = []
+        merged_movies: List[Dict] = []
         
         # DEBUG: show which category path is used
         try:
@@ -211,59 +218,68 @@ class MovieRankingSession:
         # For MCU, prefer keyword with proper filters (ensures only theatrical releases)
         if category == "marvel_mcu" and cat_info.get("keyword_id"):
             company_id = cat_info.get("company_id")
-            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
+            movies_kw = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
             # If keyword didn't return enough, fall back to collection
-            if len(movies) < 20:  # MCU should have ~30+ movies
-                print(f"Keyword returned only {len(movies)} movies, trying collection...")
-                movies = []
+            if len(movies_kw) < 20:  # MCU should have ~30+ movies
+                print(f"Keyword returned only {len(movies_kw)} movies, will also try collection...")
+            merged_movies.extend(movies_kw)
         
         # For Pixar, try company filter first (more reliable than keyword+company combo)
         if category == "pixar" and cat_info.get("company_id"):
-            movies = self._load_from_company(cat_info["company_id"], max_movies)
+            movies_cmp = self._load_from_company(cat_info["company_id"], max_movies)
             # If company didn't work, try keyword without company filter
-            if not movies or len(movies) < 20:
-                print(f"Company filter returned {len(movies)} Pixar movies, trying keyword...")
+            if not movies_cmp or len(movies_cmp) < 20:
+                print(f"Company filter returned {len(movies_cmp)} Pixar movies, trying keyword...")
                 if cat_info.get("keyword_id"):
-                    movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, None)
+                    movies_kw2 = self._load_from_keyword(cat_info["keyword_id"], max_movies, None)
+                    merged_movies.extend(movies_kw2)
+            merged_movies.extend(movies_cmp)
         
-        # Try multiple collections if provided
-        if not movies and isinstance(cat_info.get("collection_ids"), list) and len(cat_info.get("collection_ids")) > 0:
-            combined = []
+        # Try multiple collections if provided (merge)
+        if isinstance(cat_info.get("collection_ids"), list) and cat_info.get("collection_ids"):
             for cid in cat_info.get("collection_ids"):
                 try:
                     part = self._load_from_collection(cid, max_movies)
                     if part:
-                        combined.extend(part)
+                        merged_movies.extend(part)
                 except Exception as e:
                     print(f"Error loading from collection {cid}: {e}")
-            # De-duplicate by TMDb ID and cap
-            seen_ids = set()
-            deduped = []
-            for m in combined:
-                mid = m.get("id")
-                if mid and mid not in seen_ids:
-                    seen_ids.add(mid)
-                    deduped.append(m)
-                if len(deduped) >= max_movies:
-                    break
-            movies = deduped
         
-        # Try single collection (most reliable for curated lists, or as fallback)
-        if not movies and cat_info.get("collection_id"):
-            movies = self._load_from_collection(cat_info["collection_id"], max_movies)
+        # Try single collection (merge as well)
+        if cat_info.get("collection_id"):
+            try:
+                part_single = self._load_from_collection(cat_info["collection_id"], max_movies)
+                if part_single:
+                    merged_movies.extend(part_single)
+            except Exception as e:
+                print(f"Error loading from collection {cat_info.get('collection_id')}: {e}")
         
-        # Fall back to keyword only if collection didn't work (for categories with keywords)
-        if not movies and cat_info.get("keyword_id"):
+        # Fall back to keyword if defined and we still need more
+        if cat_info.get("keyword_id"):
             company_id = cat_info.get("company_id")
-            movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
+            kw_more = self._load_from_keyword(cat_info["keyword_id"], max_movies, company_id)
+            merged_movies.extend(kw_more)
         
-        # If no collection or movies not loaded, use curated movie IDs
-        if not movies and cat_info.get("movie_ids"):
-            movie_ids = [mid for mid in (cat_info["movie_ids"] or []) if isinstance(mid, int)][:max_movies]
-            if movie_ids:
-                movies = self._load_movies_by_ids(movie_ids)
+        # Always merge curated movie IDs as a safety net
+        if cat_info.get("movie_ids"):
+            curated_ids = [mid for mid in (cat_info["movie_ids"] or []) if isinstance(mid, int)]
+            if curated_ids:
+                merged_movies.extend(self._load_movies_by_ids(curated_ids[:max_movies]))
         
-        return movies
+        # Dedupe by TMDb ID, sort by release_date, and cap
+        out: List[Dict] = []
+        seen_ids = set()
+        for m in merged_movies:
+            mid = m.get("id")
+            if not mid or mid in seen_ids:
+                continue
+            seen_ids.add(mid)
+            out.append(m)
+            if len(out) >= max_movies:
+                break
+        
+        out.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
+        return out
     
     def _load_from_keyword(self, keyword_id: int, max_movies: int = 100, company_id: int = None):
         """Load movies from TMDb using keyword with proper filters for theatrical releases only"""
