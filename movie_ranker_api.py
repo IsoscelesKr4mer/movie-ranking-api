@@ -106,6 +106,12 @@ MOVIE_CATEGORIES = {
         "name": "X-Men Films",
         "description": "X-Men movie franchise",
         # FIX: Correct TMDb collection ID for X‑Men film series\n        # TMDb \"X-Men Collection\" is 748 (main X‑Men films); also include explicit IDs for robustness\n        \"collection_id\": 748,\n        \"movie_ids\": [36657, 36658, 36668, 2080, 49538, 76170, 127585, 246655, 263115, 320288, 293660, 383498, 340102]\n
+    },
+    "rocky": {
+        "name": "Rocky (incl. Creed)",
+        "description": "Rocky franchise including Creed spin-offs",
+        "collection_ids": [1575, 553717],
+        "movie_ids": None
     }
 }
 
