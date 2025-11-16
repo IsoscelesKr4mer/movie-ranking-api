@@ -7,6 +7,8 @@ import uuid
 from datetime import datetime, timedelta
 import csv
 import io
+import re
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 # Enable CORS for all routes and origins - allow requests from localhost and any domain
@@ -565,6 +567,135 @@ class MovieRankingSession:
         
         return len(imported_movies)
     
+    def import_letterboxd_url(self, letterboxd_url: str) -> int:
+        """Import movies from a Letterboxd list URL"""
+        if not API_KEY:
+            raise ValueError("TMDb API key not configured")
+        
+        imported_movies = []
+        failed_imports = []
+        
+        try:
+            # Fetch the Letterboxd page
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+            response = requests.get(letterboxd_url, headers=headers, timeout=15)
+            response.raise_for_status()
+            
+            # Parse HTML
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Find all film items - Letterboxd uses different structures for lists
+            # Try to find film poster items or list items
+            film_items = soup.find_all('li', class_=re.compile('listitem|poster-container'))
+            
+            if not film_items:
+                # Alternative: look for film-title elements
+                film_items = soup.find_all(['div', 'span'], class_=re.compile('film-title|film-name'))
+            
+            if not film_items:
+                # Last resort: look for any link that might be a film link
+                film_items = soup.find_all('a', href=re.compile(r'/film/'))
+            
+            print(f"Found {len(film_items)} potential film items on Letterboxd page")
+            
+            # Extract movie titles and years
+            movies_to_search = []
+            seen_titles = set()
+            
+            for item in film_items:
+                # Try to extract title from various possible structures
+                title = None
+                year = None
+                
+                # Method 1: Look for film-title or similar
+                title_elem = item.find(class_=re.compile('film-title|film-name|title'))
+                if title_elem:
+                    title = title_elem.get_text(strip=True)
+                
+                # Method 2: Look for data attributes
+                if not title:
+                    title = item.get('data-film-name') or item.get('data-film-title')
+                
+                # Method 3: Extract from link href (format: /film/film-name-year/)
+                if not title:
+                    link = item.find('a', href=re.compile(r'/film/'))
+                    if link:
+                        href = link.get('href', '')
+                        # Extract film name from URL (e.g., /film/the-matrix-1999/)
+                        match = re.search(r'/film/([^/]+?)(?:-\d{4})?/?$', href)
+                        if match:
+                            # Convert URL slug back to title (basic conversion)
+                            title_slug = match.group(1)
+                            title = title_slug.replace('-', ' ').title()
+                
+                # Extract year
+                year_elem = item.find(class_=re.compile('film-year|year|release-year'))
+                if year_elem:
+                    year_text = year_elem.get_text(strip=True)
+                    year_match = re.search(r'\d{4}', year_text)
+                    if year_match:
+                        year = int(year_match.group())
+                
+                # Also try to extract year from data attributes or other places
+                if not year:
+                    year_text = item.get('data-film-year') or item.get('data-film-release-year')
+                    if year_text:
+                        year_match = re.search(r'\d{4}', str(year_text))
+                        if year_match:
+                            year = int(year_match.group())
+                
+                # Try to extract year from the title text itself
+                if not year and title:
+                    year_match = re.search(r'\s\((\d{4})\)', title)
+                    if year_match:
+                        year = int(year_match.group(1))
+                        title = re.sub(r'\s\(\d{4}\)', '', title).strip()
+                
+                if title:
+                    # Normalize title (remove common suffixes)
+                    title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
+                    title = re.sub(r'\s*\[[^\]]*\]\s*$', '', title).strip()
+                    
+                    # Create unique key for deduplication
+                    title_key = f"{title.lower()}-{year}" if year else title.lower()
+                    if title_key not in seen_titles:
+                        seen_titles.add(title_key)
+                        movies_to_search.append({"title": title, "year": year})
+            
+            print(f"Extracted {len(movies_to_search)} unique movies from Letterboxd")
+            
+            # Search for each movie in TMDb
+            for movie_info in movies_to_search:
+                title = movie_info["title"]
+                year = movie_info.get("year")
+                
+                movie = self._search_movie_tmdb(title, year)
+                
+                if movie:
+                    # Check for duplicates by TMDb ID
+                    if not any(m.get("id") == movie.get("id") for m in imported_movies):
+                        imported_movies.append(movie)
+                else:
+                    failed_imports.append({"title": title, "year": year})
+            
+            # Sort by release date
+            imported_movies.sort(key=lambda m: m.get("release_date", "") or "9999-12-31")
+            
+            # Store imported movies
+            self.movies = imported_movies
+            
+            if failed_imports:
+                print(f"Failed to import {len(failed_imports)} movies: {failed_imports[:5]}...")
+            
+            return len(imported_movies)
+            
+        except requests.RequestException as e:
+            raise ValueError(f"Failed to fetch Letterboxd page: {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Failed to parse Letterboxd page: {str(e)}")
+    
     def select_movies(self, movie_ids: List[int]):
         """Select movies that the user has seen (by their TMDb IDs)"""
         if not self.movies:
@@ -907,11 +1038,31 @@ def select_movies(session_id: str):
 
 @app.route('/api/session/<session_id>/movies/import', methods=['POST'])
 def import_letterboxd(session_id: str):
-    """Import movies from a Letterboxd CSV file"""
+    """Import movies from a Letterboxd URL or CSV file"""
     if session_id not in sessions:
         return jsonify({"error": "Session not found"}), 404
     
-    # Check if CSV file is uploaded or CSV content is provided
+    data = request.get_json() or {}
+    letterboxd_url = data.get('letterboxd_url') or data.get('url')
+    
+    # Check if URL is provided
+    if letterboxd_url:
+        try:
+            session = sessions[session_id]
+            count = session.import_letterboxd_url(letterboxd_url)
+            
+            return jsonify({
+                "message": f"Imported {count} movies from Letterboxd",
+                "movie_count": count,
+                "loaded_count": count,
+                "movies": session.movies
+            }), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": f"Failed to import Letterboxd URL: {str(e)}"}), 500
+    
+    # Fall back to CSV file upload
     if 'file' in request.files:
         file = request.files['file']
         if file.filename == '':
@@ -919,29 +1070,42 @@ def import_letterboxd(session_id: str):
         
         # Read file content
         csv_content = file.read().decode('utf-8')
-    elif request.is_json:
-        # CSV content as JSON string
-        data = request.get_json() or {}
-        csv_content = data.get('csv_content', '')
-        if not csv_content:
-            return jsonify({"error": "No CSV content provided"}), 400
-    else:
-        return jsonify({"error": "No file or CSV content provided"}), 400
-    
-    try:
-        session = sessions[session_id]
-        count = session.import_letterboxd_csv(csv_content)
         
-        return jsonify({
-            "message": f"Imported {count} movies from Letterboxd",
-            "movie_count": count,
-            "loaded_count": count,
-            "movies": session.movies
-        }), 200
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        return jsonify({"error": f"Failed to import Letterboxd CSV: {str(e)}"}), 500
+        try:
+            session = sessions[session_id]
+            count = session.import_letterboxd_csv(csv_content)
+            
+            return jsonify({
+                "message": f"Imported {count} movies from Letterboxd CSV",
+                "movie_count": count,
+                "loaded_count": count,
+                "movies": session.movies
+            }), 200
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+        except Exception as e:
+            return jsonify({"error": f"Failed to import Letterboxd CSV: {str(e)}"}), 500
+    
+    # Check for CSV content in JSON
+    if request.is_json:
+        csv_content = data.get('csv_content', '')
+        if csv_content:
+            try:
+                session = sessions[session_id]
+                count = session.import_letterboxd_csv(csv_content)
+                
+                return jsonify({
+                    "message": f"Imported {count} movies from Letterboxd CSV",
+                    "movie_count": count,
+                    "loaded_count": count,
+                    "movies": session.movies
+                }), 200
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+            except Exception as e:
+                return jsonify({"error": f"Failed to import Letterboxd CSV: {str(e)}"}), 500
+    
+    return jsonify({"error": "No Letterboxd URL, CSV file, or CSV content provided"}), 400
 
 
 @app.route('/api/session/<session_id>/ranking/start', methods=['POST'])

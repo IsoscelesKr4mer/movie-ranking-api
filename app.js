@@ -15,7 +15,7 @@ const movieCategorySelect = document.getElementById('movie-category');
 const movieYearInput = document.getElementById('movie-year');
 const maxMoviesInput = document.getElementById('max-movies');
 const createSessionBtn = document.getElementById('create-session-btn');
-const letterboxdFileInput = document.getElementById('letterboxd-file');
+const letterboxdUrlInput = document.getElementById('letterboxd-url');
 const importLetterboxdBtn = document.getElementById('import-letterboxd-btn');
 const sessionInfo = document.getElementById('session-info');
 const sessionIdSpan = document.getElementById('session-id');
@@ -193,9 +193,15 @@ async function createSessionAndLoadMovies() {
 // Import Letterboxd List
 async function importLetterboxdList() {
     try {
-        const file = letterboxdFileInput.files[0];
-        if (!file) {
-            showMessage('Please select a CSV file to import', 'error');
+        const letterboxdUrl = letterboxdUrlInput.value.trim();
+        if (!letterboxdUrl) {
+            showMessage('Please enter a Letterboxd list URL', 'error');
+            return;
+        }
+
+        // Validate URL format
+        if (!letterboxdUrl.match(/^https?:\/\/(www\.)?(letterboxd\.com|boxd\.it)/)) {
+            showMessage('Please enter a valid Letterboxd URL (letterboxd.com or boxd.it)', 'error');
             return;
         }
 
@@ -209,24 +215,14 @@ async function importLetterboxdList() {
         sessionInfo.classList.remove('hidden');
         sessionStatusSpan.textContent = 'Session created';
 
-        showMessage('Session created! Importing Letterboxd list...', 'info');
+        showMessage('Session created! Fetching and importing Letterboxd list...', 'info');
 
-        // Read file and import using FormData for file upload
-        const formData = new FormData();
-        formData.append('file', file);
-
-        // Use fetch directly for FormData (file upload)
-        const response = await fetch(`${apiUrl}/api/session/${sessionId}/movies/import`, {
-            method: 'POST',
-            body: formData
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || `HTTP ${response.status}`);
-        }
-
-        const importData = await response.json();
+        // Import from URL
+        const importData = await apiCall(
+            `/api/session/${sessionId}/movies/import`,
+            'POST',
+            { letterboxd_url: letterboxdUrl }
+        );
 
         loadedMovies = importData.movies || [];
         sessionStatusSpan.textContent = `Imported ${importData.loaded_count} movies`;
