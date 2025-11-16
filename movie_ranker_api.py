@@ -105,7 +105,9 @@ MOVIE_CATEGORIES = {
     "xmen": {
         "name": "X-Men Films",
         "description": "X-Men movie franchise",
-        # FIX: Correct TMDb collection ID for X‑Men film series\n        # TMDb \"X-Men Collection\" is 748 (main X‑Men films); also include explicit IDs for robustness\n        \"collection_id\": 748,\n        \"movie_ids\": [36657, 36658, 36668, 2080, 49538, 76170, 127585, 246655, 263115, 320288, 293660, 383498, 340102]\n
+        # Use main X‑Men collection and merge curated fallback IDs (incl. Wolverine, Deadpool, New Mutants)
+        "collection_id": 748,
+        "movie_ids": [36657, 36658, 36668, 2080, 49538, 76170, 127585, 246655, 263115, 320288, 293660, 383498, 340102]
     },
     "rocky": {
         "name": "Rocky (incl. Creed)",
