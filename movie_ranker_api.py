@@ -994,49 +994,65 @@ def set_movies(session_id: str):
 
 @app.route('/api/tmdb/enrich', methods=['POST'])
 def tmdb_enrich_titles():
-    """Enrich a list of titles via TMDb using the server's API key. Returns ordered matches with minimal fields."""
+    """Enrich titles via TMDb using the server's API key.
+    Accepts either { titles: string[] } or { items: [{title, year}] }.
+    Returns ordered matches with minimal fields."""
     if not API_KEY:
         return jsonify({"error": "TMDb API key not configured on server"}), 500
 
     data = request.get_json() or {}
-    titles = data.get('titles', [])
-    if not isinstance(titles, list) or any(not isinstance(t, str) for t in titles):
-        return jsonify({"error": "titles must be a list of strings"}), 400
+    items_in = None
+    if "items" in data and isinstance(data["items"], list):
+        # [{title, year}]
+        items_in = [{"title": (i.get("title") or "").strip(), "year": (str(i.get("year")).strip() if i.get("year") else None)} for i in data["items"]]
+    elif "titles" in data and isinstance(data["titles"], list):
+        items_in = [{"title": (str(t) or "").strip(), "year": None} for t in data["titles"]]
+    else:
+        return jsonify({"error": "Provide either {items:[{title,year}]} or {titles:[string]}" }), 400
 
-    if len(titles) == 0:
-        return jsonify({"items": []}), 200
+    # Cap to 200
+    items_in = items_in[:200]
 
-    # Cap to 200 items
-    titles = titles[:200]
-
-    # Enrich sequentially to avoid rate-limit issues
-    items = []
-    for t in titles:
-        t_norm = (t or '').strip()
-        if not t_norm:
-            items.append({
-                "id": None, "title": "", "poster_url": None, "release_date": None, "matched": False
-            })
+    # Enrich sequentially (rate-limit friendly)
+    out = []
+    for rec in items_in:
+        title = rec["title"]
+        year = rec["year"]
+        if not title:
+            out.append({"id": None, "title": "", "poster_url": None, "release_date": None, "matched": False, "requested_year": year, "year_match": False})
             continue
-        movie = sessions[next(iter(sessions))]._search_best_match_simple(t_norm) if sessions else MovieRankingSession("tmp")._search_best_match_simple(t_norm)
+
+        # Prefer year-aware match, fall back to fuzzy without year
+        movie = None
+        if year:
+            movie = sessions[next(iter(sessions))]._search_movie_tmdb(title, int(year)) if sessions else MovieRankingSession("tmp")._search_movie_tmdb(title, int(year))
+        if not movie:
+            movie = sessions[next(iter(sessions))]._search_best_match_simple(title) if sessions else MovieRankingSession("tmp")._search_best_match_simple(title)
+
         if movie:
-            items.append({
+            rd = movie.get("release_date") or ""
+            y = rd[:4] if len(rd) >= 4 else None
+            out.append({
                 "id": movie.get("id"),
                 "title": movie.get("title"),
                 "poster_url": movie.get("poster_url") or (f"{IMAGE_BASE}{movie.get('poster_path', '')}" if movie.get('poster_path') else ""),
                 "release_date": movie.get("release_date") or None,
-                "matched": True
+                "matched": True,
+                "requested_year": year,
+                "year_match": (year is not None and y == year)
             })
         else:
-            items.append({
+            out.append({
                 "id": None,
-                "title": t_norm,
+                "title": title,
                 "poster_url": None,
                 "release_date": None,
-                "matched": False
+                "matched": False,
+                "requested_year": year,
+                "year_match": False
             })
 
-    return jsonify({"items": items, "count": len(items)}), 200
+    return jsonify({"items": out, "count": len(out)}), 200
 
 @app.route('/api/letterboxd/fetch', methods=['POST'])
 def proxy_fetch_letterboxd():

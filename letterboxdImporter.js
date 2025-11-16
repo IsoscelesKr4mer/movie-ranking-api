@@ -36,13 +36,14 @@
       const item = document.createElement('div');
       item.className = 'movie-select-item';
       item.dataset.movieId = m.id || `nomatch-${idx}`;
+      const mismatch = m.matched && m.requested_year && m.release_date && !m.year_match;
       item.innerHTML = `
-        <div class="checkmark" title="${m.matched ? 'TMDb match found' : 'No TMDb match'}">${m.matched ? '✓' : '✗'}</div>
+        <div class="checkmark" title="${m.matched ? (m.year_match ? 'TMDb match (year matched)' : 'TMDb match (year mismatch ?)') : 'No TMDb match'}">${m.matched ? (mismatch ? '?' : '✓') : '✗'}</div>
         <img loading="lazy" src="${m.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
              alt="${m.title}"
              onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
         <h5>${m.title}</h5>
-        <p style="font-size: 0.8rem; color: #666;">${(m.release_date || '').split('-')[0] || 'TBD'}</p>
+        <p style="font-size: 0.8rem; color: #666;">${(m.release_date || '').split('-')[0] || 'TBD'}${m.requested_year ? ` (req ${m.requested_year})` : ''}</p>
       `;
       grid.appendChild(item);
     });
@@ -90,7 +91,7 @@
     try {
       setStatus('Parsing list...');
       const parsed = await window.parseLetterboxdList(url, 200, (s) => setStatus(s));
-      if (!parsed.titles || parsed.titles.length === 0) {
+      if (!parsed.items || parsed.items.length === 0) {
         throw new Error('No titles found. Ensure the list is public.');
       }
       if (parsed.truncated) {
@@ -98,7 +99,9 @@
       }
 
       setStatus('Matching titles on TMDb...');
-      const enrichResp = await apiCall('/api/tmdb/enrich', 'POST', { titles: parsed.titles });
+      // Send title + year for precise matching
+      const payloadItems = parsed.items.map(it => ({ title: it.title, year: it.year || null }));
+      const enrichResp = await apiCall('/api/tmdb/enrich', 'POST', { items: payloadItems });
       const enriched = enrichResp.items || [];
 
       // Display preview with checkmarks

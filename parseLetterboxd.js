@@ -1,8 +1,13 @@
 // Lightweight client-side Letterboxd parser with pagination and robust selectors
 // No external libs. Uses fetch + DOMParser. Caches results for 24h in localStorage.
 /**
+ * @typedef {Object} ParsedItem
+ * @property {number} rank
+ * @property {string} title
+ * @property {string|null} year
+ *
  * @typedef {Object} ParsedList
- * @property {string[]} titles - Ordered film titles as they appear on the list
+ * @property {ParsedItem[]} items - Ordered items with title and year
  * @property {boolean} truncated - True if we capped to maxItems
  * @property {number} pagesParsed - Number of pages parsed
  */
@@ -84,45 +89,70 @@ function extractTitlesFromHtml(html) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
-  const titles = [];
+  const items = [];
 
-  // Primary: list items with film-list-item and <h2 class="film-title">
-  doc.querySelectorAll('.film-list-item h2.film-title, li.listitem h2.film-title').forEach(h2 => {
-    const text = h2.textContent?.trim();
-    if (text) titles.push(text);
+  // Primary selectors per Letterboxd shared lists
+  const candidates = Array.from(doc.querySelectorAll('ul.film-list li, div[class*="film-list-item"], .poster-and-title'));
+  candidates.forEach(node => {
+    const titleEl = node.querySelector('h2.film-title a, .film-title a, h2 a, .title a');
+    let title = titleEl?.textContent?.trim() || '';
+    if (!title) return;
+
+    // Year: various selectors
+    let year =
+      node.querySelector('span.release-year')?.textContent?.trim() ||
+      node.querySelector('time[datetime]')?.getAttribute('datetime')?.slice(0, 4) ||
+      node.querySelector('.film-meta time')?.textContent?.trim() ||
+      node.querySelector('small')?.textContent?.trim() ||
+      null;
+    // Normalize year text to just YYYY when possible
+    if (year) {
+      const m = String(year).match(/\b(19|20)\d{2}\b/);
+      year = m ? m[0] : null;
+    }
+
+    // Basic filtering
+    const lower = title.toLowerCase();
+    if (lower.includes('tv series') || lower.includes('(tv)') || lower.includes('(short)') || title.length < 3) {
+      return;
+    }
+
+    items.push({ title, year, rank: 0 });
   });
 
   // Fallback A: grid/poster lists with .film-poster and title attribute or alt
-  if (titles.length === 0) {
+  if (items.length === 0) {
     doc.querySelectorAll('.film-poster').forEach(div => {
       const titleAttr = div.getAttribute('data-film-name') || div.getAttribute('data-original-title') || div.getAttribute('title');
       if (titleAttr) {
         const text = titleAttr.trim();
-        if (text) titles.push(text);
+        if (text) items.push({ title: text, year: null, rank: 0 });
       } else {
         const img = div.querySelector('img[alt]');
         const text = img?.getAttribute('alt')?.trim();
-        if (text) titles.push(text);
+        if (text) items.push({ title: text, year: null, rank: 0 });
       }
     });
   }
 
   // Fallback B: generic title links
-  if (titles.length === 0) {
+  if (items.length === 0) {
     doc.querySelectorAll('.title a, .headline-2 a').forEach(a => {
       const text = a.textContent?.trim();
-      if (text) titles.push(text);
+      if (text) items.push({ title: text, year: null, rank: 0 });
     });
   }
 
   // Skip obvious non-movie entries by heuristic (very short labels like "TV", "Short")
-  const filtered = titles.filter(t => {
-    const normalized = t.toLowerCase();
+  const filtered = items.filter(it => {
+    const normalized = it.title.toLowerCase();
     if (normalized === 'tv' || normalized === 'short') return false;
-    if (t.length < 2) return false;
+    if (it.title.length < 2) return false;
     return true;
   });
 
+  // Assign ranks by order
+  filtered.forEach((it, idx) => { it.rank = idx + 1; });
   return filtered;
 }
 
@@ -164,28 +194,43 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
 
   let currentUrl = url;
   let pageCount = 0;
-  const all = [];
+  const allItems = [];
   const visited = new Set();
 
-  while (currentUrl && all.length < maxItems) {
+  while (currentUrl && allItems.length < maxItems) {
     if (visited.has(currentUrl)) break;
     visited.add(currentUrl);
 
     pageCount += 1;
     onStatus(`Parsing page ${pageCount}...`);
-    const html = await fetchHtml(currentUrl);
-    const titles = extractTitlesFromHtml(html);
-    titles.forEach(t => {
-      if (all.length < maxItems) all.push(t);
+    let html = await fetchHtml(currentUrl);
+    // DEBUG: Log beginning of HTML to confirm structure and avoid parsing sidebar/etc
+    try {
+      console.log('[Letterboxd HTML snippet]', html.substring(0, 2000));
+    } catch {}
+    let items = extractTitlesFromHtml(html);
+    items.forEach(it => {
+      if (allItems.length < maxItems) allItems.push(it);
     });
 
     const nextUrl = getNextPageUrl(html, currentUrl);
     currentUrl = nextUrl || null;
+
+    // If first page yielded nothing (share page variant), retry base list URL once
+    if (!currentUrl && pageCount === 1 && allItems.length === 0) {
+      try {
+        const stripped = url;
+        const base = stripped.replace(/\/share\/.*$/, '').replace(/\/\?page=\d+$/, '');
+        if (base !== stripped) {
+          currentUrl = base;
+        }
+      } catch {}
+    }
   }
 
   const result = {
-    titles: all,
-    truncated: all.length >= maxItems,
+    items: allItems,
+    truncated: allItems.length >= maxItems,
     pagesParsed: pageCount
   };
   setCache(url, result);
