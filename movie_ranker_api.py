@@ -702,128 +702,124 @@ class MovieRankingSession:
                 # Try to extract title and year from various possible structures
                 title = None
                 year = None
-                
-                # Handle dict items from script tag parsing
+
+                # If this is a dict (from script/regex extraction), handle separately and continue
                 if isinstance(item, dict):
                     href = item.get('href', '')
                     slug = item.get('slug', '')
                     if slug:
                         title = slug.replace('-', ' ').replace('_', ' ').title()
-                        # Try to extract year from original slug if available
-                        if 'href' in item and item['href']:
-                            year_match = re.search(r'-(\d{4})', item['href'])
-                            if year_match:
-                                year = int(year_match.group(1))
                     if href and not title:
                         match = re.search(r'/film/([^/?#]+)', href)
                         if match:
                             title_slug = match.group(1)
-                            year_match = re.search(r'-(\d{4})$', title_slug)
-                            if year_match:
-                                year = int(year_match.group(1))
+                            ym = re.search(r'-(\d{4})$', title_slug)
+                            if ym:
+                                year = int(ym.group(1))
                                 title_slug = title_slug[:-5]
                             title = title_slug.replace('-', ' ').replace('_', ' ').title()
-                
+                    if not year and href:
+                        ym2 = re.search(r'-(\d{4})', href)
+                        if ym2:
+                            year = int(ym2.group(1))
+                    if title:
+                        title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
+                        title = re.sub(r'\s*\[[^\]]*\]\s*$', '', title).strip()
+                        if len(title) >= 2:
+                            title_key = f"{title.lower()}-{year}" if year else title.lower()
+                            if title_key not in seen_titles:
+                                seen_titles.add(title_key)
+                                movies_to_search.append({"title": title, "year": year})
+                                print(f"  Found (dict): {title} ({year or 'no year'})")
+                    continue
+
                 # Handle BeautifulSoup Tag objects
-                if not title:
-                    # First, find the film link (most reliable source)
-                    link = None
-                    if hasattr(item, 'get') and item.name == 'a':
-                        # Item is already a link
-                        if item.get('href') and '/film/' in item.get('href', ''):
-                            link = item
-                    elif hasattr(item, 'find'):
-                        # Find link within the item
-                        link = item.find('a', href=re.compile(r'/film/'))
-                    
-                    # Extract from link href (most reliable - format: /film/film-name-year/ or /film/film-name/)
-                    if link:
-                        href = link.get('href', '')
-                        # Extract film slug from URL (e.g., /film/the-matrix-1999/ or /film/the-matrix/)
-                        match = re.search(r'/film/([^/?#]+)', href)
-                        if match:
-                            title_slug = match.group(1)
-                            # Check if year is in the slug (e.g., "the-matrix-1999")
-                            year_match = re.search(r'-(\d{4})$', title_slug)
-                            if year_match:
-                                year = int(year_match.group(1))
-                                title_slug = title_slug[:-5]  # Remove -YYYY
-                            
-                            # Convert URL slug to title (replace hyphens with spaces, title case)
-                            title = title_slug.replace('-', ' ').replace('_', ' ').title()
-                
-                # Method 1: Look for h2 with film-title class (Grok's suggestion - most reliable)
-                if not title:
+                # First, find the film link (most reliable source)
+                link = None
+                if hasattr(item, 'get') and getattr(item, 'name', None) == 'a':
+                    if item.get('href') and '/film/' in item.get('href', ''):
+                        link = item
+                elif hasattr(item, 'find'):
+                    link = item.find('a', href=re.compile(r'/film/'))
+
+                # Extract from link href (format: /film/film-name-year/ or /film/film-name/)
+                if link:
+                    href = link.get('href', '')
+                    match = re.search(r'/film/([^/?#]+)', href)
+                    if match:
+                        title_slug = match.group(1)
+                        ym = re.search(r'-(\d{4})$', title_slug)
+                        if ym:
+                            year = int(ym.group(1))
+                            title_slug = title_slug[:-5]
+                        title = title_slug.replace('-', ' ').replace('_', ' ').title()
+
+                # Method 1: h2.film-title
+                if not title and hasattr(item, 'find'):
                     title_elem = item.find('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
                     if title_elem:
                         title = title_elem.get_text(strip=True)
-                
-                # Method 1b: Look for any element with film-title or similar in text content
-                if not title:
+
+                # Method 1b: any element with film-title/film-name/title
+                if not title and hasattr(item, 'find'):
                     title_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-title', 'film-name', 'title']) if x else False)
                     if title_elem:
                         title = title_elem.get_text(strip=True)
-                
-                # Method 2: Look for data attributes (Letterboxd uses data-film-slug, data-film-name, etc.)
-                if not title:
+
+                # Method 2: data attributes
+                if not title and hasattr(item, 'get'):
                     title = (item.get('data-film-name') or 
-                            item.get('data-film-title') or
-                            (link and link.get('data-film-name')) or
-                            (link and link.get('data-film-title')))
-                
-                # Method 3: Extract title from img alt attribute (posters have alt text with film name)
-                if not title:
+                             item.get('data-film-title') or
+                             (link and link.get('data-film-name')) or
+                             (link and link.get('data-film-title')))
+
+                # Method 3: img alt attribute
+                if not title and hasattr(item, 'find'):
                     img = item.find('img')
                     if img:
                         alt_text = img.get('alt', '')
                         if alt_text and alt_text.strip():
                             title = alt_text.strip()
-                
+
                 # Extract year from various sources
-                if not year:
+                if not year and hasattr(item, 'find'):
                     year_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-year', 'year', 'release-year']))
                     if year_elem:
                         year_text = year_elem.get_text(strip=True)
-                        year_match = re.search(r'\d{4}', year_text)
-                        if year_match:
-                            year = int(year_match.group())
-                
-                # Also try to extract year from data attributes
-                if not year:
+                        ym = re.search(r'\d{4}', year_text)
+                        if ym:
+                            year = int(ym.group())
+
+                if not year and hasattr(item, 'get'):
                     year_text = (item.get('data-film-year') or 
-                                item.get('data-film-release-year') or
-                                (link and link.get('data-film-year')) or
-                                (link and link.get('data-film-release-year')))
+                                 item.get('data-film-release-year') or
+                                 (link and link.get('data-film-year')) or
+                                 (link and link.get('data-film-release-year')))
                     if year_text:
-                        year_match = re.search(r'\d{4}', str(year_text))
-                        if year_match:
-                            year = int(year_match.group())
-                
-                # Try to extract year from the title text itself
+                        ym = re.search(r'\d{4}', str(year_text))
+                        if ym:
+                            year = int(ym.group())
+
+                # Year from title text
                 if not year and title:
-                    year_match = re.search(r'\s*\((\d{4})\)', title)
-                    if year_match:
-                        year = int(year_match.group(1))
+                    ym = re.search(r'\s*\((\d{4})\)', title)
+                    if ym:
+                        year = int(ym.group(1))
                         title = re.sub(r'\s*\(\d{4}\)', '', title).strip()
-                
-                # Also check if year is at the end of title (e.g., "The Matrix 1999")
+
+                # Year at end of title
                 if not year and title:
-                    year_match = re.search(r'\s+(\d{4})\s*$', title)
-                    if year_match:
-                        year = int(year_match.group(1))
+                    ym = re.search(r'\s+(\d{4})\s*$', title)
+                    if ym:
+                        year = int(ym.group(1))
                         title = title[:-5].strip()
-                
+
                 if title:
-                    # Normalize title (remove common suffixes, clean up)
                     title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
                     title = re.sub(r'\s*\[[^\]]*\]\s*$', '', title).strip()
                     title = title.strip()
-                    
-                    # Skip if title is too short or looks invalid
                     if len(title) < 2:
                         continue
-                    
-                    # Create unique key for deduplication
                     title_key = f"{title.lower()}-{year}" if year else title.lower()
                     if title_key not in seen_titles:
                         seen_titles.add(title_key)
