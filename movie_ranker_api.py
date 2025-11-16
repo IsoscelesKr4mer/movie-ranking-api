@@ -143,30 +143,30 @@ class MovieRankingSession:
             all_movies = self._load_movies_from_category(category, max_movies)
         elif year:
             # Load from year (original functionality)
-        url = f"{API_BASE}/discover/movie"
-        params = {
-            "api_key": API_KEY,
-            "primary_release_year": year,
-            "sort_by": "popularity.desc",
-            "page": 1
-        }
-        
-        page = 1
-        while len(all_movies) < max_movies and page <= 5:
-            params["page"] = page
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
+            url = f"{API_BASE}/discover/movie"
+            params = {
+                "api_key": API_KEY,
+                "primary_release_year": year,
+                "sort_by": "popularity.desc",
+                "page": 1
+            }
             
-            for movie in data.get("results", []):
-                if movie.get("poster_path") and movie.get("title"):
+            page = 1
+            while len(all_movies) < max_movies and page <= 5:
+                params["page"] = page
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                for movie in data.get("results", []):
+                    if movie.get("poster_path") and movie.get("title"):
                         all_movies.append(self._format_movie(movie))
-                    if len(all_movies) >= max_movies:
-                        break
-            
-            if not data.get("results"):
-                break
-            page += 1
+                        if len(all_movies) >= max_movies:
+                            break
+                
+                if not data.get("results"):
+                    break
+                page += 1
         else:
             raise ValueError("Must provide either year or category")
         
