@@ -39,14 +39,24 @@ function getCache(url) {
       localStorage.removeItem(`lb_cache:${url}`);
       return null;
     }
-    return parsed.data;
+    // Guard: don't return empty results from cache
+    const data = parsed.data;
+    if (data && Array.isArray(data.items) && data.items.length > 0) {
+      return data;
+    }
+    // Stale/empty - drop it
+    localStorage.removeItem(`lb_cache:${url}`);
+    return null;
   } catch {
     return null;
   }
 }
 function setCache(url, data) {
   try {
-    localStorage.setItem(`lb_cache:${url}`, JSON.stringify({ timestamp: Date.now(), data }));
+    // Only cache when we have at least one item
+    if (data && Array.isArray(data.items) && data.items.length > 0) {
+      localStorage.setItem(`lb_cache:${url}`, JSON.stringify({ timestamp: Date.now(), data }));
+    }
   } catch {
     // ignore quota errors
   }
