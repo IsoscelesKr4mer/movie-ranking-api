@@ -53,11 +53,25 @@ function setCache(url, data) {
  * @returns {Promise<string>}
  */
 async function fetchHtml(url) {
-  const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch list page (${res.status})`);
+  // Always go through our backend proxy to avoid browser CORS
+  const base = (window.API_BASE || '').replace(/\/$/, '');
+  if (!base) {
+    throw new Error('API base not configured for Letterboxd fetch');
   }
-  return await res.text();
+  const res = await fetch(`${base}/api/letterboxd/fetch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Proxy fetch failed (${res.status})`);
+  }
+  const data = await res.json();
+  if (!data || typeof data.html !== 'string') {
+    throw new Error('Invalid proxy response');
+  }
+  return data.html;
 }
 
 /**

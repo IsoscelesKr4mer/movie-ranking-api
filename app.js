@@ -538,6 +538,8 @@ console.log('API URL:', apiUrl);
 if (apiUrlInput) {
     apiUrlInput.value = apiUrl;
 }
+// Expose to other modules that may need it (parser/importer)
+window.API_BASE = apiUrl;
 loadCategories();
 showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
 

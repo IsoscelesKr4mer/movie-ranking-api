@@ -970,6 +970,30 @@ def tmdb_enrich_titles():
 
     return jsonify({"items": items, "count": len(items)}), 200
 
+@app.route('/api/letterboxd/fetch', methods=['POST'])
+def proxy_fetch_letterboxd():
+    """Server-side fetch of a Letterboxd URL to bypass browser CORS. Returns raw HTML string."""
+    data = request.get_json() or {}
+    url = (data.get('url') or '').strip()
+    if not url:
+        return jsonify({"error": "Missing 'url'"}), 400
+    try:
+        parsed = requests.utils.urlparse(url)
+        host = (parsed.netloc or '').lower()
+        if not (host.endswith('letterboxd.com') or host.endswith('boxd.it')):
+            return jsonify({"error": "Only letterboxd.com or boxd.it URLs are allowed"}), 400
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9'
+        }
+        resp = requests.get(url, headers=headers, timeout=20, allow_redirects=True)
+        if resp.status_code != 200:
+            return jsonify({"error": f"Upstream status {resp.status_code}"}), 502
+        return jsonify({"html": resp.text}), 200
+    except Exception as e:
+        return jsonify({"error": f"Proxy fetch failed: {str(e)}"}), 500
+
 @app.route('/api/session/<session_id>/movies/select', methods=['POST'])
 def select_movies(session_id: str):
     """Select movies that the user has seen"""
