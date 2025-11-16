@@ -16,6 +16,8 @@ let TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/';
 /**
  * Configure TMDb API key and fetch configuration once for secure base url.
  * Falls back to default image base if config fails.
+ * NOTE: The scraper-first import no longer requires client-side TMDb, but
+ * these helpers remain for optional high‑res poster enhancement.
  * @param {string} apiKey
  */
 async function configureTmdb(apiKey) {
@@ -36,7 +38,7 @@ async function configureTmdb(apiKey) {
 
 function posterUrlFromPath(path) {
   if (!path) return null;
-  return `${TMDB_IMAGE_BASE}${TMDB_IMAGE_SIZE}${path}`;
+  return `${TMDB_IMAGE_SIZE === 'w500' ? TMDB_IMAGE_BASE + TMDB_IMAGE_SIZE : TMDB_IMAGE_BASE + TMDB_IMAGE_SIZE}${path}`;
 }
 
 /**
@@ -46,19 +48,16 @@ function posterUrlFromPath(path) {
  */
 function pickBestMatch(query, results) {
   if (!results || results.length === 0) return null;
-  // Prefer first result with votes
   const withVotes = results.filter(r => (r?.vote_count || 0) > 0);
   if (withVotes.length > 0) {
-    // Among those, prefer higher vote_average
     withVotes.sort((a, b) => (b.vote_average || 0) - (a.vote_average || 0));
     return withVotes[0];
   }
-  // Otherwise, first result
   return results[0];
 }
 
 /**
- * Search one title on TMDb.
+ * DIRECT TMDb search (kept for non-import features).
  * @param {string} title
  * @returns {Promise<EnrichedMovie>}
  */
@@ -66,7 +65,6 @@ async function searchOneTitle(title) {
   const url = `https://api.themoviedb.org/3/search/movie?api_key=${encodeURIComponent(TMDB_API_KEY)}&query=${encodeURIComponent(title)}&language=en-US&include_adult=false`;
   const res = await fetch(url);
   if (!res.ok) {
-    // Try page=2 once if first page fails
     const res2 = await fetch(url + '&page=2');
     if (!res2.ok) {
       return { id: null, title, poster_url: null, release_date: null, matched: false, raw: null };
@@ -95,7 +93,69 @@ async function searchOneTitle(title) {
 }
 
 /**
+ * HYBRID FIX: Poster-only enrichment via backend /api/tmdb/enrich
+ * Uses server-side TMDb key and returns poster URLs when LB poster is missing.
+ * @param {string} title
+ * @param {string|null} year
+ * @returns {Promise<string|null>} poster URL or null
+ */
+async function getPoster(title, year) {
+  const base = (window.API_BASE || '').replace(/\/$/, '');
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base}/api/tmdb/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: [{ title, year: year || null }] })
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const item = (data?.items || [])[0];
+    return (item && item.poster_url) ? item.poster_url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * HYBRID FIX: Batch poster enrichment for items missing posters.
+ * @param {Array<{title:string, year:string|null}>} items
+ * @param {{concurrency?: number, onProgress?: (done:number,total:number)=>void}} [opts]
+ * @returns {Promise<Array<string|null>>} array of poster URLs (or null)
+ */
+async function getPostersBatch(items, opts = {}) {
+  const base = (window.API_BASE || '').replace(/\/$/, '');
+  const concurrency = opts.concurrency || 10;
+  const onProgress = opts.onProgress || (() => {});
+  if (!base || !Array.isArray(items) || items.length === 0) return [];
+
+  const results = new Array(items.length).fill(null);
+  for (let i = 0; i < items.length; i += concurrency) {
+    const chunk = items.slice(i, i + concurrency);
+    try {
+      const res = await fetch(`${base}/api/tmdb/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: chunk })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        (data.items || []).forEach((row, idx) => {
+          results[i + idx] = row && row.poster_url ? row.poster_url : null;
+        });
+      }
+    } catch {}
+    onProgress(Math.min(i + chunk.length, items.length), items.length);
+    if (i + concurrency < items.length) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+  return results;
+}
+
+/**
  * Enrich titles with TMDb in batches of 10 with 100ms gaps.
+ * (Deprecated for core import; kept for other features.)
  * @param {string[]} titles
  * @param {(done:number,total:number)=>void} onProgress
  * @returns {Promise<EnrichedMovie[]>}
@@ -111,8 +171,7 @@ async function enrichTitlesWithTmdb(titles, onProgress = () => {}) {
       else results.push({ id: null, title: batch[results.length - i] || '', poster_url: null, release_date: null, matched: false, raw: null });
     });
     onProgress(Math.min(i + batch.length, titles.length), titles.length);
-    // Respect TMDb rate limit (<= 40/s). 10 at a time + 100ms delay is safe.
-    if (i + batchSize < titles.length) {
+    if (i + batchSize < items.length) {
       await new Promise(r => setTimeout(r, 100));
     }
   }
@@ -121,7 +180,9 @@ async function enrichTitlesWithTmdb(titles, onProgress = () => {}) {
 
 window.tmdb = {
   configureTmdb,
-  enrichTitlesWithTmdb
+  enrichTitlesWithTmdb, // legacy
+  getPoster,
+  getPostersBatch
 };
 
 

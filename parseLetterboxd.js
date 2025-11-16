@@ -1,22 +1,25 @@
 // Lightweight client-side Letterboxd parser with pagination and robust selectors
 // No external libs. Uses fetch + DOMParser. Caches results for 24h in localStorage.
+//
+// SHIFT: We scrape title/year AND poster URLs directly from Letterboxd (including
+// LazyPoster data). If the LB image is a placeholder (e.g., contains "empty-poster"),
+// we set lbPosterUrl to null so the importer can optionally fetch a TMDb poster.
+
 /**
  * @typedef {Object} ParsedItem
  * @property {number} rank
  * @property {string} title
  * @property {string|null} year
  * @property {string|null} poster_url
- *
- * @typedef {Object} ParsedList
- * @property {ParsedItem[]} items - Ordered items with title and year
- * @property {boolean} truncated - True if we capped to maxItems
- * @property {number} pagesParsed - Number of pages parsed
+ * @property {string|null} lbPosterUrl
+ * @property {boolean} [isLbPosterPlaceholder]
+ * @property {number} [originalIndex]
  */
  
 const LB_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Normalize and validate a Letterboxd share or short URL. If share URL 404s, fallback to base.
+ * Normalize and validate a Letterboxd share or short URL. If share URL 404s, strip to base.
  * @param {string} url
  * @returns {string}
  */
@@ -26,6 +29,27 @@ function normalizeLetterboxdUrl(url) {
     throw new Error('Please paste a valid Letterboxd URL (letterboxd.com or boxd.it)');
   }
   return trimmed;
+}
+
+/**
+ * Get normalized poster URL from an <img> element, preferring real images over LB placeholders.
+ * @param {HTMLImageElement|null} img
+ * @returns {{url: string|null, placeholder: boolean}}
+ */
+function extractPosterFromImg(img) {
+  if (!img) return { url: null, placeholder: true };
+  let src = img.getAttribute('src') || img.getAttribute('data-src') || '';
+  if (!src) {
+    const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
+    if (set) {
+      const first = set.split(',')[0]?.trim();
+      if (first) src = first.split(' ')[0] || '';
+    }
+  }
+  if (!src) return { url: null, placeholder: true };
+  const abs = /^https?:\/\//i.test(src) ? src : `https://letterboxd.com${src}`;
+  const placeholder = /empty-?poster/i.test(abs);
+  return { url: placeholder ? null : abs, placeholder };
 }
 
 /**
@@ -40,7 +64,6 @@ function getCache(url) {
       localStorage.removeItem(`lb_cache:${url}`);
       return null;
     }
-    // Guard: don't return empty results from cache
     const data = parsed.data;
     if (data && Array.isArray(data.items) && data.items.length > 0) {
       return data;
@@ -94,7 +117,7 @@ async function fetchHtml(url) {
  * Extract titles from a single page HTML string.
  * Tries multiple selectors for robustness and preserves exact text.
  * @param {string} html
- * @returns {string[]} titles in DOM order
+ * @returns {ParsedItem[]}
  */
 function extractTitlesFromHtml(html) {
   const parser = new DOMParser();
@@ -102,14 +125,14 @@ function extractTitlesFromHtml(html) {
 
   const items = [];
 
-  // FIX: Try ld+json ItemList first (most reliable for shared lists)
+  // Try ld+json first (reliable for many lists)
   try {
     const jsonScripts = Array.from(doc.querySelectorAll('script[type="application/ld+json"]'));
     for (const s of jsonScripts) {
       try {
         const data = JSON.parse(s.textContent || 'null');
         if (data && data.itemListElement && Array.isArray(data.itemListElement)) {
-          data.itemListElement.forEach((el) => {
+          data.itemListElement.forEach((el, idx) => {
             const it = el && (el.item || el.url || el.name);
             if (!it) return;
             let title = null;
@@ -121,7 +144,6 @@ function extractTitlesFromHtml(html) {
                 const m = String(date).match(/\b(19|20)\d{2}\b/);
                 if (m) year = m[0];
               }
-              // Try URL slug for year
               if (!year && it.url) {
                 const ym = String(it.url).match(/-(\d{4})\/?$/);
                 if (ym) year = ym[1];
@@ -132,46 +154,27 @@ function extractTitlesFromHtml(html) {
               if (ym) year = ym[1];
             }
             if (title && title.length >= 2) {
-              items.push({ title, year: year || null, rank: 0 });
+              items.push({ rank: idx + 1, title, year: year || null, lbPosterUrl: null, poster_url: null, isLbPosterPlaceholder: true });
             }
           });
         }
       } catch {}
     }
-    if (items.length > 0) {
-      console.debug('[LB Parser] ld+json extracted', items.length);
-      items.forEach((it, idx) => { it.rank = idx + 1; });
-      return items;
-    }
   } catch {}
 
-  // Primary selectors per Letterboxd shared lists
-  // FIX: include React-LazyPoster components carrying rich data attributes
+  // LazyPoster nodes (primary source in many LB list UIs)
   const lazyPosterNodes = Array.from(doc.querySelectorAll('.react-component[data-component-class="LazyPoster"]'));
-  lazyPosterNodes.forEach(node => {
+  lazyPosterNodes.forEach((node, i) => {
     const name = node.getAttribute('data-item-name') || node.getAttribute('data-item-full-display-name') || '';
     const slug = node.getAttribute('data-item-slug') || node.getAttribute('data-target-link') || '';
-    const posterDataUrl = node.getAttribute('data-poster-url') || '';
-    // Try to read image src or lazy-src/srcset (LB uses <img src> or data-src/srcset)
     const img = node.querySelector('img');
-    let imgSrc = img ? (img.getAttribute('src') || img.getAttribute('data-src') || '') : '';
-    if (!imgSrc && img) {
-      const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
-      if (set) {
-        const first = set.split(',')[0]?.trim();
-        if (first) {
-          imgSrc = first.split(' ')[0];
-        }
-      }
-    }
+    const posterInfo = extractPosterFromImg(img);
     let title = (name || '').trim();
     let year = null;
     if (title) {
       const m = title.match(/\b(19|20)\d{2}\b/);
-      if (m) {
-        year = m[0];
-      }
-      // FIX: strip trailing " (YYYY)" from title; preserve year separately
+      if (m) year = m[0];
+      // strip trailing (YYYY) from title text
       title = title.replace(/\s*\(\d{4}\)\s*$/, '').trim();
     }
     if (!year && slug) {
@@ -179,119 +182,71 @@ function extractTitlesFromHtml(html) {
       if (y2) year = y2[1];
     }
     if (title && title.length >= 2) {
-      let poster_url = null;
-      if (imgSrc) {
-        // ensure absolute
-        poster_url = /^https?:\/\//i.test(imgSrc) ? imgSrc : `https://letterboxd.com${imgSrc}`;
-      } else if (posterDataUrl) {
-        // data-item gives a relative page to the poster; prefix LB host so it resolves
-        poster_url = posterDataUrl.startsWith('http') ? posterDataUrl : `https://letterboxd.com${posterDataUrl}`;
-      }
-      items.push({ title, year, poster_url: poster_url || null, rank: 0 });
+      items.push({
+        rank: i + 1,
+        title,
+        year: year || null,
+        lbPosterUrl: posterInfo.url,
+        poster_url: posterInfo.url, // keep for backward compatibility
+        isLbPosterPlaceholder: !!posterInfo.placeholder
+      });
     }
   });
 
-  const candidates = Array.from(doc.querySelectorAll('ul.film-list li, li.film-list-entry, li.poster-container, div.film-list-item, div[class*="film-list-item"], .poster-and-title'));
-  candidates.forEach(node => {
-    const titleEl = node.querySelector('h2.film-title a, .film-title a, h2 a, .title a');
+  // Other list items (film-list-item, poster-container, etc.)
+  const candidates = Array.from(doc.querySelectorAll('ul.film-list li.film-list-item, div[class*="film-list-item"], li.poster-container, li.listitem'));
+  candidates.forEach((node, idx) => {
+    const titleEl = node.querySelector('h2.film-title a, .film-title a, h2 a');
     let title = titleEl?.textContent?.trim() || '';
     if (!title) return;
-
-    // Year: various selectors
-    let year =
-      node.querySelector('span.release-year')?.textContent?.trim() ||
-      node.querySelector('time[datetime]')?.getAttribute('datetime')?.slice(0, 4) ||
-      node.querySelector('.film-meta time')?.textContent?.trim() ||
-      node.querySelector('small')?.textContent?.trim() ||
-      null;
-    // Normalize year text to just YYYY when possible
-    if (year) {
-      const m = String(year).match(/\b(19|20)\d{2}\b/);
-      year = m ? m[0] : null;
+    let year = null;
+    const yNode = node.querySelector('span.release-year, .film-meta time, small, time[datetime]');
+    if (yNode) {
+      const txt = yNode.getAttribute ? (yNode.getAttribute('datetime') || yNode.textContent) : yNode.textContent;
+      const m = String(txt).match(/\b(19|20)\d{2}\b/);
+      if (m) year = m[0];
     }
-
-  // Poster from image if present (support lazy-loaded attributes)
-  const img = node.querySelector('img[alt], img.image, img');
-  let poster_url = null;
-  if (img) {
-    let src = img.getAttribute('src') || img.getAttribute('data-src') || '';
-    if (!src) {
-      const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
-      const first = set.split(',')[0]?.trim();
-      if (first) {
-        src = first.split(' ')[0];
-      }
-    }
-    if (src) {
-      poster_url = /^https?:\/\//i.test(src) ? src : `https://letterboxd.com${src}`;
-    }
-  }
-
-    // Basic filtering
+    const img = node.querySelector('img.film-poster-img, .film-poster img, img[src*="ltrbxd"], img[alt], img');
+    const posterInfo = extractPosterFromImg(img);
     const lower = title.toLowerCase();
-    if (lower.includes('tv series') || lower.includes('(tv)') || lower.includes('(short)') || title.length < 3) {
-      return;
-    }
-    // Remove trailing year from title if present to avoid duplication with separate year label
+    if (lower.includes('tv series') || lower.includes('(tv)') || lower.includes('short')) return;
     title = title.replace(/\s*\(\d{4}\)\s*$/, '').trim();
-
-    items.push({ title, year, poster_url, rank: 0 });
+    items.push({
+      rank: idx + 1,
+      title,
+      year: year || null,
+      lbPosterUrl: posterInfo.url,
+      poster_url: posterInfo.url,
+      isLbPosterPlaceholder: !!posterInfo.placeholder
+    });
   });
 
-  // FIX: data attributes used frequently on LB list entries
+  // Fallback: legacy .film-poster blocks
   if (items.length === 0) {
-    const nodes = doc.querySelectorAll('[data-film-name]');
-    nodes.forEach(n => {
-      const t = n.getAttribute('data-film-name') || '';
-      const y = n.getAttribute('data-film-year') || n.getAttribute('data-film-release-year') || null;
-      const img = n.querySelector('img.image, img[alt]');
-      const poster_url = img?.getAttribute('src') || null;
-      if (t && t.trim().length >= 2) items.push({ title: t.trim(), year: y ? String(y).match(/\b(19|20)\d{2}\b/)?.[0] || null : null, poster_url, rank: 0 });
-    });
-  }
-
-  // Fallback A: grid/poster lists with .film-poster and title attribute or alt
-  if (items.length === 0) {
-    doc.querySelectorAll('.film-poster').forEach(div => {
-      const titleAttr = div.getAttribute('data-film-name') || div.getAttribute('data-original-title') || div.getAttribute('title');
-      if (titleAttr) {
-        const text = titleAttr.trim();
-        if (text) items.push({ title: text, year: null, rank: 0 });
-      } else {
-        const img = div.querySelector('img');
-        const alt = img?.getAttribute('alt')?.trim();
-        let src = img ? (img.getAttribute('src') || img.getAttribute('data-src') || '') : '';
-        if (!src && img) {
-          const set = img.getAttribute('data-srcset') || img.getAttribute('srcset') || '';
-          const first = set.split(',')[0]?.trim();
-          if (first) {
-            src = first.split(' ')[0];
-          }
-        }
-        const poster = src ? (/^https?:\/\//i.test(src) ? src : `https://letterboxd.com${src}`) : null;
-        if (alt) items.push({ title: alt, year: null, poster_url: poster, rank: 0 });
+    doc.querySelectorAll('.film-poster').forEach((div, idx) => {
+      const titleAttr = div.getAttribute('data-film-name') || div.getAttribute('data-original-title') || div.getAttribute('title') || '';
+      const img = div.querySelector('img');
+      const posterInfo = extractPosterFromImg(img);
+      const title = (titleAttr || '').trim();
+      if (title) {
+        items.push({
+          rank: idx + 1,
+          title: title.replace(/\s*\(\d{4}\)\s*$/, '').trim(),
+          year: null,
+          lbPosterUrl: posterInfo.url,
+          poster_url: posterInfo.url,
+          isLbPosterPlaceholder: !!posterInfo.placeholder
+        });
       }
     });
   }
 
-  // Fallback B: generic title links
-  if (items.length === 0) {
-    doc.querySelectorAll('.title a, .headline-2 a').forEach(a => {
-      const text = a.textContent?.trim();
-      if (text) items.push({ title: text, year: null, rank: 0 });
-    });
-  }
-
-  // Skip obvious non-movie entries by heuristic (very short labels like "TV", "Short")
+  // Filter and finalize
   const filtered = items.filter(it => {
-    const normalized = it.title.toLowerCase();
-    if (normalized === 'tv' || normalized === 'short') return false;
-    if (it.title.length < 2) return false;
-    return true;
+    const normalized = (it.title || '').toLowerCase();
+    return normalized && normalized.length >= 2 && !normalized.includes('tv series') && !normalized.includes('(tv)') && !normalized.includes('short');
   });
-
-  // Assign ranks by order
-  filtered.forEach((it, idx) => { it.rank = idx + 1; });
+  filtered.forEach((it, i) => { it.rank = i + 1; it.originalIndex = i; });
   return filtered;
 }
 
@@ -304,7 +259,7 @@ function extractTitlesFromHtml(html) {
 function getNextPageUrl(html, baseUrl) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
-  const next = doc.querySelector('a.next, a[rel="next"], .pagination-next a');
+  const next = doc.querySelector('a.next, a[rel=\"next\"], .pagination-next a');
   if (next && next.getAttribute('href')) {
     const href = next.getAttribute('href');
     try {
@@ -321,7 +276,7 @@ function getNextPageUrl(html, baseUrl) {
  * @param {string} inputUrl
  * @param {number} maxItems
  * @param {(status: string) => void} onStatus
- * @returns {Promise<ParsedList>}
+ * @returns {Promise<{items: ParsedItem[], truncated: boolean, pagesParsed: number}>}
  */
 async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}) {
   const url = normalizeLetterboxdUrl(inputUrl);
@@ -343,22 +298,20 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
     pageCount += 1;
     onStatus(`Parsing page ${pageCount}...`);
     let html = await fetchHtml(currentUrl);
-    // DEBUG: Log beginning of HTML to confirm structure and avoid parsing sidebar/etc
     try {
       console.log('[Letterboxd HTML snippet]', html.substring(0, 2000));
     } catch {}
-    let items = extractTitlesFromHtml(html);
+    const items = extractTitlesFromHtml(html) || [];
     items.forEach(it => {
       if (allItems.length < maxItems) allItems.push(it);
     });
 
-    // If first page produced nothing, retry base list URL immediately (strip /share/...)
     if (pageCount === 1 && allItems.length === 0) {
       try {
         const base = url.replace(/\/share\/.*$/, '').replace(/\/\?page=\d+$/, '');
         if (base && base !== currentUrl) {
           currentUrl = base;
-          continue; // retry loop with base URL
+          continue;
         }
       } catch {}
     }
@@ -367,18 +320,15 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
     currentUrl = nextUrl || null;
   }
 
-  // Normalize items: ensure year is a string (or 'TBD') and compute absolute poster URL.
   const normalizedItems = allItems.map((it, idx) => {
-    const rawPoster = it.poster_url || null;
-    const absolutePoster = rawPoster ? (/^https?:\/\//i.test(rawPoster) ? rawPoster : `https://letterboxd.com${rawPoster}`) : null;
-    const yr = it.year ? String(it.year) : 'TBD';
+    const lb = it.lbPosterUrl ?? it.poster_url ?? null;
+    const abs = lb ? (/^https?:\/\//i.test(lb) ? lb : `https://letterboxd.com${lb}`) : null;
     return {
       rank: typeof it.rank === 'number' ? it.rank : (idx + 1),
       title: it.title,
-      year: yr,
-      poster_url: absolutePoster,
-      // alias for convenience in UI
-      posterUrl: absolutePoster,
+      year: it.year ? String(it.year) : 'TBD',
+      lbPosterUrl: abs,
+      poster_url: abs, // keep for backward compatibility
       originalIndex: typeof it.rank === 'number' ? it.rank - 1 : idx
     };
   });
@@ -388,6 +338,7 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
     truncated: allItems.length >= maxItems,
     pagesParsed: pageCount
   };
+  console.table(result.items.slice(0, 5));
   setCache(url, result);
   return result;
 }
@@ -395,13 +346,12 @@ async function parseLetterboxdList(inputUrl, maxItems = 200, onStatus = () => {}
 // Expose to window
 window.parseLetterboxdList = parseLetterboxdList;
 
-// Simple helper to run a full scrape and log the first few items for debugging
-async function testParse(url, limit = 10) {
+// Simple helper to run a full scrape and log a few items
+window.testParse = async function testParse(url, limit = 10) {
   const { items } = await parseLetterboxdList(url, 200, (s) => console.log('Scrape:', s));
   console.table(items.slice(0, Math.min(limit, items.length)));
   return items;
-}
-window.testParse = testParse;
+};
 
 window.__lb_utils = {
   normalizeLetterboxdUrl,
