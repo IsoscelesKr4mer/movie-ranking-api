@@ -39,7 +39,7 @@
       const mismatch = m.matched && m.requested_year && m.release_date && !m.year_match;
       item.innerHTML = `
         <div class="checkmark" title="${m.matched ? (m.year_match ? 'TMDb match (year matched)' : 'TMDb match (year mismatch ?)') : 'No TMDb match'}">${m.matched ? (mismatch ? '?' : '✓') : '✗'}</div>
-        <img loading="lazy" src="${m.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
+        <img loading="lazy" src="${m.poster_url || m.fallback_poster || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
              alt="${m.title}"
              onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
         <h5>${m.title}</h5>
@@ -55,11 +55,22 @@
    * Expects a global apiCall and updates global session state; we only send matched movies with valid IDs.
    * @param {Array<any>} movies
    */
-  async function importToSession(movies) {
+  async function importToSession(movies, parsed) {
     const matched = movies.filter(m => m.matched && m.id);
-    if (matched.length === 0) {
-      throw new Error('No TMDb matches to import.');
-    }
+    // Build fallbacks using original parsed items
+    const fallbacks = [];
+    movies.forEach((m, idx) => {
+      if (!m.matched || (m.requested_year && !m.year_match)) {
+        const p = parsed.items[idx];
+        if (p && p.title) {
+          fallbacks.push({
+            title: p.title,
+            year: p.year || null,
+            poster_url: p.poster_url || null
+          });
+        }
+      }
+    });
     // Create session
     const sessionData = await apiCall('/api/session/create', 'POST');
     window.sessionId = sessionData.session_id;
@@ -67,9 +78,15 @@
     document.getElementById('session-info').classList.remove('hidden');
     document.getElementById('session-status').textContent = 'Session created';
 
-    // Set movies for session
-    const payload = { tmdb_ids: matched.map(m => m.id) };
-    const setResp = await apiCall(`/api/session/${window.sessionId}/movies/set`, 'POST', payload);
+    // Set movies for session (support mixed: tmdb matches + fallbacks with poster)
+    let setResp;
+    if (fallbacks.length > 0) {
+      const payload = { tmdb_ids: matched.map(m => m.id), fallbacks };
+      setResp = await apiCall(`/api/session/${window.sessionId}/movies/set_mixed`, 'POST', payload);
+    } else {
+      const payload = { tmdb_ids: matched.map(m => m.id) };
+      setResp = await apiCall(`/api/session/${window.sessionId}/movies/set`, 'POST', payload);
+    }
     addMessage(`Imported ${setResp.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
 
     // Display for selection (reuse app.js helper)
@@ -108,7 +125,7 @@
       renderPreview(enriched);
 
       setStatus('Creating session and importing...');
-      await importToSession(enriched);
+      await importToSession(enriched, parsed);
 
       setStatus('Done!');
     } catch (e) {

@@ -992,6 +992,60 @@ def set_movies(session_id: str):
         return jsonify({"error": f"Failed to set movies: {str(e)}"}), 500
 
 
+@app.route('/api/session/<session_id>/movies/set_mixed', methods=['POST'])
+def set_movies_mixed(session_id: str):
+    """Set session movies using TMDb IDs plus optional fallback items with custom poster/years when TMDb lacks entries."""
+    if session_id not in sessions:
+        return jsonify({"error": "Session not found"}), 404
+
+    data = request.get_json() or {}
+    tmdb_ids = data.get('tmdb_ids', [])
+    fallbacks = data.get('fallbacks', [])
+
+    if not isinstance(tmdb_ids, list) or not all(isinstance(i, int) for i in tmdb_ids):
+        return jsonify({"error": "tmdb_ids must be a list of integers"}), 400
+    if not isinstance(fallbacks, list):
+        return jsonify({"error": "fallbacks must be a list"}), 400
+
+    tmdb_ids = tmdb_ids[:200]
+    fallbacks = fallbacks[:200 - len(tmdb_ids)]
+
+    try:
+        session = sessions[session_id]
+        movies = session._load_movies_by_ids(tmdb_ids) if tmdb_ids else []
+
+        # Create placeholder entries for fallbacks (negative IDs), keep order after tmdb movies
+        for fb in fallbacks:
+            title = str(fb.get('title') or '').strip()
+            if not title:
+                continue
+            year = fb.get('year')
+            poster_url = str(fb.get('poster_url') or '').strip()
+
+            # Negative, stable ID
+            placeholder_id = -int(zlib.crc32(title.encode('utf-8')))
+            # Build minimal movie object
+            movie_obj = {
+                "id": placeholder_id,
+                "title": title,
+                "poster_path": "",
+                "poster_url": poster_url,
+                "release_date": f"{year}-01-01" if year and str(year).isdigit() and len(str(year)) == 4 else "",
+                "vote_average": 0,
+                "overview": ""
+            }
+            movies.append(movie_obj)
+
+        session.movies = movies
+        session.selected_movies = []
+        return jsonify({
+            "message": f"Loaded {len(movies)} movies (tmdb: {len(tmdb_ids)}, fallbacks: {len(movies) - len(session._load_movies_by_ids(tmdb_ids))})",
+            "loaded_count": len(movies),
+            "movies": movies
+        }), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to set mixed movies: {str(e)}"}), 500
+
 @app.route('/api/tmdb/enrich', methods=['POST'])
 def tmdb_enrich_titles():
     """Enrich titles via TMDb using the server's API key.

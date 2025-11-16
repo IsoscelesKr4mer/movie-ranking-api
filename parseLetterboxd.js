@@ -5,6 +5,7 @@
  * @property {number} rank
  * @property {string} title
  * @property {string|null} year
+ * @property {string|null} poster_url
  *
  * @typedef {Object} ParsedList
  * @property {ParsedItem[]} items - Ordered items with title and year
@@ -150,6 +151,10 @@ function extractTitlesFromHtml(html) {
   lazyPosterNodes.forEach(node => {
     const name = node.getAttribute('data-item-name') || node.getAttribute('data-item-full-display-name') || '';
     const slug = node.getAttribute('data-item-slug') || node.getAttribute('data-target-link') || '';
+    const posterDataUrl = node.getAttribute('data-poster-url') || '';
+    // Try to read image src if present (higher-res available via srcset too)
+    const img = node.querySelector('img.image');
+    const imgSrc = img?.getAttribute('src') || '';
     let title = (name || '').trim();
     let year = null;
     if (title) {
@@ -165,7 +170,8 @@ function extractTitlesFromHtml(html) {
       if (y2) year = y2[1];
     }
     if (title && title.length >= 2) {
-      items.push({ title, year, rank: 0 });
+      const poster_url = imgSrc || (posterDataUrl ? new URL(posterDataUrl, location.origin).toString() : null);
+      items.push({ title, year, poster_url: poster_url || null, rank: 0 });
     }
   });
 
@@ -188,13 +194,17 @@ function extractTitlesFromHtml(html) {
       year = m ? m[0] : null;
     }
 
+    // Poster from image if present
+    const img = node.querySelector('img[alt], img.image');
+    const poster_url = img?.getAttribute('src') || null;
+
     // Basic filtering
     const lower = title.toLowerCase();
     if (lower.includes('tv series') || lower.includes('(tv)') || lower.includes('(short)') || title.length < 3) {
       return;
     }
 
-    items.push({ title, year, rank: 0 });
+    items.push({ title, year, poster_url, rank: 0 });
   });
 
   // FIX: data attributes used frequently on LB list entries
@@ -203,7 +213,9 @@ function extractTitlesFromHtml(html) {
     nodes.forEach(n => {
       const t = n.getAttribute('data-film-name') || '';
       const y = n.getAttribute('data-film-year') || n.getAttribute('data-film-release-year') || null;
-      if (t && t.trim().length >= 2) items.push({ title: t.trim(), year: y ? String(y).match(/\b(19|20)\d{2}\b/)?.[0] || null : null, rank: 0 });
+      const img = n.querySelector('img.image, img[alt]');
+      const poster_url = img?.getAttribute('src') || null;
+      if (t && t.trim().length >= 2) items.push({ title: t.trim(), year: y ? String(y).match(/\b(19|20)\d{2}\b/)?.[0] || null : null, poster_url, rank: 0 });
     });
   }
 
