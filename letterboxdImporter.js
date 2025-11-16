@@ -84,9 +84,8 @@
   /**
    * Main orchestrator used by app.js
    * @param {string} url
-   * @param {string} tmdbApiKey
    */
-  async function runLetterboxdImport(url, tmdbApiKey) {
+  async function runLetterboxdImport(url) {
     setStatus('');
     try {
       setStatus('Parsing list...');
@@ -98,18 +97,9 @@
         addMessage('List truncated to first 200 items to avoid overload.', 'info');
       }
 
-      setStatus('Configuring TMDb...');
-      await window.tmdb.configureTmdb(tmdbApiKey);
-
       setStatus('Matching titles on TMDb...');
-      let lastPct = -1;
-      const enriched = await window.tmdb.enrichTitlesWithTmdb(parsed.titles, (done, total) => {
-        const pct = Math.floor((done / total) * 100);
-        if (pct !== lastPct) {
-          setStatus(`Matching TMDb: ${pct}% (${done}/${total})`);
-          lastPct = pct;
-        }
-      });
+      const enrichResp = await apiCall('/api/tmdb/enrich', 'POST', { titles: parsed.titles });
+      const enriched = enrichResp.items || [];
 
       // Display preview with checkmarks
       renderPreview(enriched);

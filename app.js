@@ -208,19 +208,7 @@ async function importLetterboxdList() {
         showLoading(true);
         showMessage('Parsing and importing Letterboxd list...', 'info');
 
-        // Use public TMDb API key from server-side configuration fallback file/env if available
-        // Since this is a static client, ask for a key once if not configured.
-        // For this app, we derive the API key from server via categories pre-load fallback path,
-        // but since not exposed, require the user to set TMDb key below if needed.
-        const tmdbKey = (window.TMDB_PUBLIC_KEY) || (window.localStorage.getItem('TMDB_PUBLIC_KEY') || '');
-        if (!tmdbKey) {
-            const entered = prompt('Enter your TMDb API key to enrich titles:');
-            if (!entered) throw new Error('TMDb API key required to import.');
-            window.localStorage.setItem('TMDB_PUBLIC_KEY', entered);
-        }
-        const apiKey = window.localStorage.getItem('TMDB_PUBLIC_KEY');
-
-        await window.runLetterboxdImport(letterboxdUrl, apiKey);
+        await window.runLetterboxdImport(letterboxdUrl);
 
         // After importToSession completes, we should have loadedMovies populated from server
         selectedMovieIds.clear();

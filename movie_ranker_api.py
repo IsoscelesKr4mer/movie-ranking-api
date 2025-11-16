@@ -540,6 +540,41 @@ class MovieRankingSession:
             return None
     
     # Letterboxd CSV import removed
+
+    def _search_best_match_simple(self, title: str) -> Optional[Dict]:
+        """Search TMDb by title and return best simple match (prefers vote_count > 0, then highest vote_average)."""
+        try:
+            def do_search(page: int = 1) -> Optional[Dict]:
+                url = f"{API_BASE}/search/movie"
+                params = {
+                    "api_key": API_KEY,
+                    "query": title,
+                    "include_adult": False,
+                    "language": "en-US",
+                    "page": page
+                }
+                resp = requests.get(url, params=params, timeout=10)
+                resp.raise_for_status()
+                data_local = resp.json()
+                results = data_local.get("results", []) or []
+                if not results:
+                    return None
+                with_votes = [r for r in results if (r.get("vote_count") or 0) > 0]
+                if with_votes:
+                    with_votes.sort(key=lambda r: (r.get("vote_average") or 0), reverse=True)
+                    return with_votes[0]
+                return results[0]
+
+            first = do_search(1)
+            if first:
+                return self._format_movie(first)
+            second = do_search(2)
+            if second:
+                return self._format_movie(second)
+            return None
+        except Exception as e:
+            print(f"Simple search error for '{title}': {e}")
+            return None
     
     def import_letterboxd_url(self, letterboxd_url: str) -> int:
         """Deprecated. Letterboxd import removed from backend; use client-side parser."""
@@ -888,6 +923,52 @@ def set_movies(session_id: str):
     except Exception as e:
         return jsonify({"error": f"Failed to set movies: {str(e)}"}), 500
 
+
+@app.route('/api/tmdb/enrich', methods=['POST'])
+def tmdb_enrich_titles():
+    """Enrich a list of titles via TMDb using the server's API key. Returns ordered matches with minimal fields."""
+    if not API_KEY:
+        return jsonify({"error": "TMDb API key not configured on server"}), 500
+
+    data = request.get_json() or {}
+    titles = data.get('titles', [])
+    if not isinstance(titles, list) or any(not isinstance(t, str) for t in titles):
+        return jsonify({"error": "titles must be a list of strings"}), 400
+
+    if len(titles) == 0:
+        return jsonify({"items": []}), 200
+
+    # Cap to 200 items
+    titles = titles[:200]
+
+    # Enrich sequentially to avoid rate-limit issues
+    items = []
+    for t in titles:
+        t_norm = (t or '').strip()
+        if not t_norm:
+            items.append({
+                "id": None, "title": "", "poster_url": None, "release_date": None, "matched": False
+            })
+            continue
+        movie = sessions[next(iter(sessions))]._search_best_match_simple(t_norm) if sessions else MovieRankingSession("tmp")._search_best_match_simple(t_norm)
+        if movie:
+            items.append({
+                "id": movie.get("id"),
+                "title": movie.get("title"),
+                "poster_url": movie.get("poster_url") or (f"{IMAGE_BASE}{movie.get('poster_path', '')}" if movie.get('poster_path') else ""),
+                "release_date": movie.get("release_date") or None,
+                "matched": True
+            })
+        else:
+            items.append({
+                "id": None,
+                "title": t_norm,
+                "poster_url": None,
+                "release_date": None,
+                "matched": False
+            })
+
+    return jsonify({"items": items, "count": len(items)}), 200
 
 @app.route('/api/session/<session_id>/movies/select', methods=['POST'])
 def select_movies(session_id: str):
