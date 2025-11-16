@@ -609,6 +609,30 @@ class MovieRankingSession:
                 film_links = soup.find_all('a', href=re.compile(r'/film/'))
                 film_items = [link.find_parent(['li', 'div']) or link for link in film_links]
             
+            # Strategy 5: Check if content is in script tags (Letterboxd sometimes embeds JSON)
+            if not film_items or len(film_items) < 5:
+                # Look for script tags with JSON data
+                script_tags = soup.find_all('script', type=re.compile(r'application/json|text/javascript'))
+                for script in script_tags:
+                    content = script.string
+                    if content and '/film/' in content:
+                        # Try to extract film links from JSON/JS
+                        film_matches = re.findall(r'/film/([^/"\']+)', content)
+                        if film_matches:
+                            print(f"Found {len(film_matches)} film slugs in script tags")
+                            # Create pseudo-items for these
+                            for slug in film_matches:
+                                # Remove year if present
+                                slug_clean = re.sub(r'-\d{4}$', '', slug)
+                                # Create a minimal item dict
+                                film_items.append({"slug": slug_clean, "href": f"/film/{slug}"})
+            
+            # Strategy 6: Last resort - find ANY link with /film/ in href (most aggressive)
+            if not film_items or len(film_items) < 5:
+                all_film_links = soup.find_all('a', href=re.compile(r'/film/'))
+                print(f"Strategy 6: Found {len(all_film_links)} total /film/ links in HTML")
+                film_items = all_film_links if all_film_links else film_items
+            
             print(f"Found {len(film_items)} potential film items on Letterboxd page")
             
             # Extract movie titles and years
@@ -620,31 +644,54 @@ class MovieRankingSession:
                 title = None
                 year = None
                 
-                # First, find the film link (most reliable source)
-                link = None
-                if isinstance(item, type(soup.new_tag('a'))):
-                    # Item is already a link
-                    if item.get('href') and '/film/' in item.get('href', ''):
-                        link = item
-                else:
-                    # Find link within the item
-                    link = item.find('a', href=re.compile(r'/film/'))
+                # Handle dict items from script tag parsing
+                if isinstance(item, dict):
+                    href = item.get('href', '')
+                    slug = item.get('slug', '')
+                    if slug:
+                        title = slug.replace('-', ' ').replace('_', ' ').title()
+                        # Try to extract year from original slug if available
+                        if 'href' in item and item['href']:
+                            year_match = re.search(r'-(\d{4})', item['href'])
+                            if year_match:
+                                year = int(year_match.group(1))
+                    if href and not title:
+                        match = re.search(r'/film/([^/?#]+)', href)
+                        if match:
+                            title_slug = match.group(1)
+                            year_match = re.search(r'-(\d{4})$', title_slug)
+                            if year_match:
+                                year = int(year_match.group(1))
+                                title_slug = title_slug[:-5]
+                            title = title_slug.replace('-', ' ').replace('_', ' ').title()
                 
-                # Extract from link href (most reliable - format: /film/film-name-year/ or /film/film-name/)
-                if link:
-                    href = link.get('href', '')
-                    # Extract film slug from URL (e.g., /film/the-matrix-1999/ or /film/the-matrix/)
-                    match = re.search(r'/film/([^/?#]+)', href)
-                    if match:
-                        title_slug = match.group(1)
-                        # Check if year is in the slug (e.g., "the-matrix-1999")
-                        year_match = re.search(r'-(\d{4})$', title_slug)
-                        if year_match:
-                            year = int(year_match.group(1))
-                            title_slug = title_slug[:-5]  # Remove -YYYY
-                        
-                        # Convert URL slug to title (replace hyphens with spaces, title case)
-                        title = title_slug.replace('-', ' ').replace('_', ' ').title()
+                # Handle BeautifulSoup Tag objects
+                if not title:
+                    # First, find the film link (most reliable source)
+                    link = None
+                    if hasattr(item, 'get') and item.name == 'a':
+                        # Item is already a link
+                        if item.get('href') and '/film/' in item.get('href', ''):
+                            link = item
+                    elif hasattr(item, 'find'):
+                        # Find link within the item
+                        link = item.find('a', href=re.compile(r'/film/'))
+                    
+                    # Extract from link href (most reliable - format: /film/film-name-year/ or /film/film-name/)
+                    if link:
+                        href = link.get('href', '')
+                        # Extract film slug from URL (e.g., /film/the-matrix-1999/ or /film/the-matrix/)
+                        match = re.search(r'/film/([^/?#]+)', href)
+                        if match:
+                            title_slug = match.group(1)
+                            # Check if year is in the slug (e.g., "the-matrix-1999")
+                            year_match = re.search(r'-(\d{4})$', title_slug)
+                            if year_match:
+                                year = int(year_match.group(1))
+                                title_slug = title_slug[:-5]  # Remove -YYYY
+                            
+                            # Convert URL slug to title (replace hyphens with spaces, title case)
+                            title = title_slug.replace('-', ' ').replace('_', ' ').title()
                 
                 # Method 1: Look for film-title or similar in text content
                 if not title:
