@@ -77,7 +77,9 @@ MOVIE_CATEGORIES = {
     "lord_of_the_rings": {
         "name": "Lord of the Rings & The Hobbit",
         "description": "LOTR and Hobbit trilogies",
-        "collection_id": 119,  # Lord of the Rings Collection
+        # FIX: Include both LOTR (119) and The Hobbit (121) collections
+        "collection_id": None,
+        "collection_ids": [119, 121],
         "movie_ids": None
     },
     "mission_impossible": {
@@ -200,6 +202,12 @@ class MovieRankingSession:
         cat_info = MOVIE_CATEGORIES[category]
         movies = []
         
+        # DEBUG: show which category path is used
+        try:
+            print(f"[Category] Loading '{category}' with info: {cat_info}")
+        except Exception:
+            pass
+        
         # For MCU, prefer keyword with proper filters (ensures only theatrical releases)
         if category == "marvel_mcu" and cat_info.get("keyword_id"):
             company_id = cat_info.get("company_id")
@@ -218,7 +226,29 @@ class MovieRankingSession:
                 if cat_info.get("keyword_id"):
                     movies = self._load_from_keyword(cat_info["keyword_id"], max_movies, None)
         
-        # Try collection (most reliable for curated lists, or as fallback)
+        # Try multiple collections if provided
+        if not movies and isinstance(cat_info.get("collection_ids"), list) and len(cat_info.get("collection_ids")) > 0:
+            combined = []
+            for cid in cat_info.get("collection_ids"):
+                try:
+                    part = self._load_from_collection(cid, max_movies)
+                    if part:
+                        combined.extend(part)
+                except Exception as e:
+                    print(f"Error loading from collection {cid}: {e}")
+            # De-duplicate by TMDb ID and cap
+            seen_ids = set()
+            deduped = []
+            for m in combined:
+                mid = m.get("id")
+                if mid and mid not in seen_ids:
+                    seen_ids.add(mid)
+                    deduped.append(m)
+                if len(deduped) >= max_movies:
+                    break
+            movies = deduped
+        
+        # Try single collection (most reliable for curated lists, or as fallback)
         if not movies and cat_info.get("collection_id"):
             movies = self._load_from_collection(cat_info["collection_id"], max_movies)
         
@@ -229,8 +259,9 @@ class MovieRankingSession:
         
         # If no collection or movies not loaded, use curated movie IDs
         if not movies and cat_info.get("movie_ids"):
-            movie_ids = cat_info["movie_ids"][:max_movies]
-            movies = self._load_movies_by_ids(movie_ids)
+            movie_ids = [mid for mid in (cat_info["movie_ids"] or []) if isinstance(mid, int)][:max_movies]
+            if movie_ids:
+                movies = self._load_movies_by_ids(movie_ids)
         
         return movies
     
