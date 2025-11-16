@@ -143,30 +143,30 @@ class MovieRankingSession:
             all_movies = self._load_movies_from_category(category, max_movies)
         elif year:
             # Load from year (original functionality)
-            url = f"{API_BASE}/discover/movie"
-            params = {
-                "api_key": API_KEY,
-                "primary_release_year": year,
-                "sort_by": "popularity.desc",
-                "page": 1
-            }
+        url = f"{API_BASE}/discover/movie"
+        params = {
+            "api_key": API_KEY,
+            "primary_release_year": year,
+            "sort_by": "popularity.desc",
+            "page": 1
+        }
+        
+        page = 1
+        while len(all_movies) < max_movies and page <= 5:
+            params["page"] = page
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
             
-            page = 1
-            while len(all_movies) < max_movies and page <= 5:
-                params["page"] = page
-                response = requests.get(url, params=params, timeout=10)
-                response.raise_for_status()
-                data = response.json()
-                
-                for movie in data.get("results", []):
-                    if movie.get("poster_path") and movie.get("title"):
+            for movie in data.get("results", []):
+                if movie.get("poster_path") and movie.get("title"):
                         all_movies.append(self._format_movie(movie))
-                        if len(all_movies) >= max_movies:
-                            break
-                
-                if not data.get("results"):
-                    break
-                page += 1
+                    if len(all_movies) >= max_movies:
+                        break
+            
+            if not data.get("results"):
+                break
+            page += 1
         else:
             raise ValueError("Must provide either year or category")
         
@@ -586,17 +586,28 @@ class MovieRankingSession:
             # Parse HTML
             soup = BeautifulSoup(response.content, 'html.parser')
             
-            # Find all film items - Letterboxd uses different structures for lists
-            # Try to find film poster items or list items
-            film_items = soup.find_all('li', class_=re.compile('listitem|poster-container'))
+            # Letterboxd list structure: movies are in <li> elements with class "listitem" or "poster-container"
+            # Each contains an <a> tag with href="/film/..." and data-film-slug
+            # Try multiple strategies to find film items
+            
+            film_items = []
+            
+            # Strategy 1: Look for list items with poster containers (most common for lists)
+            film_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)))
             
             if not film_items:
-                # Alternative: look for film-title elements
-                film_items = soup.find_all(['div', 'span'], class_=re.compile('film-title|film-name'))
+                # Strategy 2: Look for any <li> with a film link inside
+                all_li = soup.find_all('li')
+                film_items = [li for li in all_li if li.find('a', href=re.compile(r'/film/'))]
             
             if not film_items:
-                # Last resort: look for any link that might be a film link
-                film_items = soup.find_all('a', href=re.compile(r'/film/'))
+                # Strategy 3: Look for divs with poster classes
+                film_items = soup.find_all('div', class_=lambda x: x and ('poster' in ' '.join(x).lower() or 'listitem' in ' '.join(x).lower()))
+            
+            if not film_items:
+                # Strategy 4: Just find all links to /film/ pages and use their parent elements
+                film_links = soup.find_all('a', href=re.compile(r'/film/'))
+                film_items = [link.find_parent(['li', 'div']) or link for link in film_links]
             
             print(f"Found {len(film_items)} potential film items on Letterboxd page")
             
@@ -605,42 +616,72 @@ class MovieRankingSession:
             seen_titles = set()
             
             for item in film_items:
-                # Try to extract title from various possible structures
+                # Try to extract title and year from various possible structures
                 title = None
                 year = None
                 
-                # Method 1: Look for film-title or similar
-                title_elem = item.find(class_=re.compile('film-title|film-name|title'))
-                if title_elem:
-                    title = title_elem.get_text(strip=True)
-                
-                # Method 2: Look for data attributes
-                if not title:
-                    title = item.get('data-film-name') or item.get('data-film-title')
-                
-                # Method 3: Extract from link href (format: /film/film-name-year/)
-                if not title:
+                # First, find the film link (most reliable source)
+                link = None
+                if isinstance(item, type(soup.new_tag('a'))):
+                    # Item is already a link
+                    if item.get('href') and '/film/' in item.get('href', ''):
+                        link = item
+                else:
+                    # Find link within the item
                     link = item.find('a', href=re.compile(r'/film/'))
-                    if link:
-                        href = link.get('href', '')
-                        # Extract film name from URL (e.g., /film/the-matrix-1999/)
-                        match = re.search(r'/film/([^/]+?)(?:-\d{4})?/?$', href)
-                        if match:
-                            # Convert URL slug back to title (basic conversion)
-                            title_slug = match.group(1)
-                            title = title_slug.replace('-', ' ').title()
                 
-                # Extract year
-                year_elem = item.find(class_=re.compile('film-year|year|release-year'))
-                if year_elem:
-                    year_text = year_elem.get_text(strip=True)
-                    year_match = re.search(r'\d{4}', year_text)
-                    if year_match:
-                        year = int(year_match.group())
+                # Extract from link href (most reliable - format: /film/film-name-year/ or /film/film-name/)
+                if link:
+                    href = link.get('href', '')
+                    # Extract film slug from URL (e.g., /film/the-matrix-1999/ or /film/the-matrix/)
+                    match = re.search(r'/film/([^/?#]+)', href)
+                    if match:
+                        title_slug = match.group(1)
+                        # Check if year is in the slug (e.g., "the-matrix-1999")
+                        year_match = re.search(r'-(\d{4})$', title_slug)
+                        if year_match:
+                            year = int(year_match.group(1))
+                            title_slug = title_slug[:-5]  # Remove -YYYY
+                        
+                        # Convert URL slug to title (replace hyphens with spaces, title case)
+                        title = title_slug.replace('-', ' ').replace('_', ' ').title()
                 
-                # Also try to extract year from data attributes or other places
+                # Method 1: Look for film-title or similar in text content
+                if not title:
+                    title_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-title', 'film-name', 'title']))
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                
+                # Method 2: Look for data attributes (Letterboxd uses data-film-slug, data-film-name, etc.)
+                if not title:
+                    title = (item.get('data-film-name') or 
+                            item.get('data-film-title') or
+                            (link and link.get('data-film-name')) or
+                            (link and link.get('data-film-title')))
+                
+                # Method 3: Extract title from img alt attribute (posters have alt text with film name)
+                if not title:
+                    img = item.find('img')
+                    if img:
+                        alt_text = img.get('alt', '')
+                        if alt_text and alt_text.strip():
+                            title = alt_text.strip()
+                
+                # Extract year from various sources
                 if not year:
-                    year_text = item.get('data-film-year') or item.get('data-film-release-year')
+                    year_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-year', 'year', 'release-year']))
+                    if year_elem:
+                        year_text = year_elem.get_text(strip=True)
+                        year_match = re.search(r'\d{4}', year_text)
+                        if year_match:
+                            year = int(year_match.group())
+                
+                # Also try to extract year from data attributes
+                if not year:
+                    year_text = (item.get('data-film-year') or 
+                                item.get('data-film-release-year') or
+                                (link and link.get('data-film-year')) or
+                                (link and link.get('data-film-release-year')))
                     if year_text:
                         year_match = re.search(r'\d{4}', str(year_text))
                         if year_match:
@@ -648,21 +689,34 @@ class MovieRankingSession:
                 
                 # Try to extract year from the title text itself
                 if not year and title:
-                    year_match = re.search(r'\s\((\d{4})\)', title)
+                    year_match = re.search(r'\s*\((\d{4})\)', title)
                     if year_match:
                         year = int(year_match.group(1))
-                        title = re.sub(r'\s\(\d{4}\)', '', title).strip()
+                        title = re.sub(r'\s*\(\d{4}\)', '', title).strip()
+                
+                # Also check if year is at the end of title (e.g., "The Matrix 1999")
+                if not year and title:
+                    year_match = re.search(r'\s+(\d{4})\s*$', title)
+                    if year_match:
+                        year = int(year_match.group(1))
+                        title = title[:-5].strip()
                 
                 if title:
-                    # Normalize title (remove common suffixes)
+                    # Normalize title (remove common suffixes, clean up)
                     title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
                     title = re.sub(r'\s*\[[^\]]*\]\s*$', '', title).strip()
+                    title = title.strip()
+                    
+                    # Skip if title is too short or looks invalid
+                    if len(title) < 2:
+                        continue
                     
                     # Create unique key for deduplication
                     title_key = f"{title.lower()}-{year}" if year else title.lower()
                     if title_key not in seen_titles:
                         seen_titles.add(title_key)
                         movies_to_search.append({"title": title, "year": year})
+                        print(f"  Found: {title} ({year or 'no year'})")
             
             print(f"Extracted {len(movies_to_search)} unique movies from Letterboxd")
             
