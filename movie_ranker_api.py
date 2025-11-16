@@ -133,6 +133,19 @@ class MovieRankingSession:
         self.current_comparison: Optional[Dict] = None
         self.created_at = datetime.now()
     
+    def _normalize_title(self, raw_title: str) -> str:
+        """Normalize a movie title by removing trailing year markers and extra symbols"""
+        if not raw_title:
+            return raw_title
+        title = raw_title.strip()
+        # Remove trailing "(YYYY)" or "[YYYY]" or " YYYY"
+        title = re.sub(r"\s*[\(\[\{]\s*\d{4}\s*[\)\]\}]\s*$", "", title)
+        title = re.sub(r"\s+\d{4}\s*$", "", title)
+        # Collapse whitespace and remove common noise characters
+        title = re.sub(r"[\u2013\u2014\-–—:*•]+", " ", title)  # various dashes, asterisks, bullets
+        title = re.sub(r"\s{2,}", " ", title).strip()
+        return title
+    
     def load_movies(self, year: int = None, max_movies: int = 50, category: str = None):
         """Load movies from TMDb API by year or category"""
         if not API_KEY:
@@ -498,15 +511,12 @@ class MovieRankingSession:
                 return self._get_movie_details(res[0]["id"])
 
             # Try original
-            movie = do_search(title, year)
+            movie = do_search(self._normalize_title(title), year)
             if movie:
                 return movie
 
             # Clean title: strip special chars and suffixes (e.g., asterisks, en-dash notes)
-            cleaned = re.sub(r"[\u2013\u2014\-–—:*••\[\]\(\)]+", " ", title)  # dashes, asterisk, brackets
-            cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
-            # Remove trailing qualifiers like " (2025)" if present in source
-            cleaned = re.sub(r"\s\(\d{4}\)$", "", cleaned)
+            cleaned = self._normalize_title(title)
             # Remove common sequel symbols like "²"
             cleaned = cleaned.replace("²", " 2")
 
@@ -731,7 +741,7 @@ class MovieRankingSession:
                     href = item.get('href', '')
                     slug = item.get('slug', '')
                     if slug:
-                        title = slug.replace('-', ' ').replace('_', ' ').title()
+                        title = self._normalize_title(slug.replace('-', ' ').replace('_', ' ').title())
                     if href and not title:
                         match = re.search(r'/film/([^/?#]+)', href)
                         if match:
@@ -740,14 +750,13 @@ class MovieRankingSession:
                             if ym:
                                 year = int(ym.group(1))
                                 title_slug = title_slug[:-5]
-                            title = title_slug.replace('-', ' ').replace('_', ' ').title()
+                            title = self._normalize_title(title_slug.replace('-', ' ').replace('_', ' ').title())
                     if not year and href:
                         ym2 = re.search(r'-(\d{4})', href)
                         if ym2:
                             year = int(ym2.group(1))
                     if title:
-                        title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
-                        title = re.sub(r'\s*\[[^\]]*\]\s*$', '', title).strip()
+                        title = self._normalize_title(title)
                         if len(title) >= 2:
                             title_key = f"{title.lower()}-{year}" if year else title.lower()
                             if title_key not in seen_titles:
@@ -775,7 +784,7 @@ class MovieRankingSession:
                         if ym:
                             year = int(ym.group(1))
                             title_slug = title_slug[:-5]
-                        title = title_slug.replace('-', ' ').replace('_', ' ').title()
+                        title = self._normalize_title(title_slug.replace('-', ' ').replace('_', ' ').title())
 
                 # Method 1: h2.film-title
                 if not title and hasattr(item, 'find'):
@@ -802,7 +811,7 @@ class MovieRankingSession:
                     if img:
                         alt_text = img.get('alt', '')
                         if alt_text and alt_text.strip():
-                            title = alt_text.strip()
+                            title = self._normalize_title(alt_text.strip())
 
                 # Extract year from various sources
                 if not year and hasattr(item, 'find'):
@@ -838,9 +847,7 @@ class MovieRankingSession:
                         title = title[:-5].strip()
 
                 if title:
-                    title = re.sub(r'\s*\([^)]*\)\s*$', '', title).strip()
-                    title = re.sub(r'\s*\[[^\]]*\]\s*$', '', title).strip()
-                    title = title.strip()
+                    title = self._normalize_title(title)
                     if len(title) < 2:
                         continue
                     title_key = f"{title.lower()}-{year}" if year else title.lower()
@@ -876,6 +883,7 @@ class MovieRankingSession:
                     title = fi.get("title")
                     if not title:
                         continue
+                    title = self._normalize_title(title)
                     # Stable negative ID based on CRC32 of title
                     placeholder_id = -int(zlib.crc32(title.encode("utf-8")))
                     placeholder = {
