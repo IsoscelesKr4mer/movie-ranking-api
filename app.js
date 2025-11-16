@@ -190,6 +190,62 @@ async function createSessionAndLoadMovies() {
     }
 }
 
+// Import Letterboxd List
+async function importLetterboxdList() {
+    try {
+        const file = letterboxdFileInput.files[0];
+        if (!file) {
+            showMessage('Please select a CSV file to import', 'error');
+            return;
+        }
+
+        showLoading(true);
+        showMessage('Creating session...', 'info');
+
+        // Create session first
+        const sessionData = await apiCall('/api/session/create', 'POST');
+        sessionId = sessionData.session_id;
+        sessionIdSpan.textContent = sessionId;
+        sessionInfo.classList.remove('hidden');
+        sessionStatusSpan.textContent = 'Session created';
+
+        showMessage('Session created! Importing Letterboxd list...', 'info');
+
+        // Read file and import using FormData for file upload
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // Use fetch directly for FormData (file upload)
+        const response = await fetch(`${apiUrl}/api/session/${sessionId}/movies/import`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP ${response.status}`);
+        }
+
+        const importData = await response.json();
+
+        loadedMovies = importData.movies || [];
+        sessionStatusSpan.textContent = `Imported ${importData.loaded_count} movies`;
+        
+        // Show selection section
+        selectionSection.classList.remove('hidden');
+        displayMoviesForSelection(loadedMovies);
+        selectedMovieIds.clear();
+        updateSelectedCount();
+        
+        showMessage(`Imported ${importData.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
+        showLoading(false);
+
+    } catch (error) {
+        showMessage(`Failed to import Letterboxd list: ${error.message}`, 'error');
+        showLoading(false);
+    }
+}
+
 function displayMoviesForSelection(movies) {
     moviesSelectionGrid.innerHTML = '';
     
