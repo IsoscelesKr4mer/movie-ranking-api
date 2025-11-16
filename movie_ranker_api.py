@@ -613,23 +613,36 @@ class MovieRankingSession:
             if meta_tags:
                 print(f"DEBUG: Found {len(meta_tags)} film-related meta tags")
             
-            # Letterboxd list structure: movies are in <li> elements with class "listitem" or "poster-container"
+            # Letterboxd list structure: movies are in various structures
+            # According to Letterboxd structure: <div class="film-list-item"> with <h2 class="film-title">
+            # Or <li> elements with class "listitem" or "poster-container"
             # Each contains an <a> tag with href="/film/..." and data-film-slug
             # Try multiple strategies to find film items
             
             film_items = []
             
-            # Strategy 1: Look for list items with poster containers (most common for lists)
-            film_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)))
+            # Strategy 1: Look for film-list-item divs (Grok's suggestion - most reliable)
+            film_items = soup.find_all('div', class_=lambda x: x and 'film-list-item' in ' '.join(x) if x else False)
             
             if not film_items:
-                # Strategy 2: Look for any <li> with a film link inside
+                # Strategy 1b: Look for h2 with film-title class
+                film_title_elems = soup.find_all('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
+                if film_title_elems:
+                    # Get parent containers
+                    film_items = [elem.find_parent(['div', 'li']) or elem for elem in film_title_elems]
+            
+            if not film_items:
+                # Strategy 2: Look for list items with poster containers (common for lists)
+                film_items = soup.find_all('li', class_=lambda x: x and ('listitem' in ' '.join(x) or 'poster-container' in ' '.join(x)) if x else False)
+            
+            if not film_items:
+                # Strategy 3: Look for any <li> with a film link inside
                 all_li = soup.find_all('li')
                 film_items = [li for li in all_li if li.find('a', href=re.compile(r'/film/'))]
             
             if not film_items:
-                # Strategy 3: Look for divs with poster classes
-                film_items = soup.find_all('div', class_=lambda x: x and ('poster' in ' '.join(x).lower() or 'listitem' in ' '.join(x).lower()))
+                # Strategy 4: Look for divs with poster classes
+                film_items = soup.find_all('div', class_=lambda x: x and ('poster' in ' '.join(x).lower() or 'listitem' in ' '.join(x).lower()) if x else False)
             
             if not film_items:
                 # Strategy 4: Just find all links to /film/ pages and use their parent elements
@@ -739,9 +752,15 @@ class MovieRankingSession:
                             # Convert URL slug to title (replace hyphens with spaces, title case)
                             title = title_slug.replace('-', ' ').replace('_', ' ').title()
                 
-                # Method 1: Look for film-title or similar in text content
+                # Method 1: Look for h2 with film-title class (Grok's suggestion - most reliable)
                 if not title:
-                    title_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-title', 'film-name', 'title']))
+                    title_elem = item.find('h2', class_=lambda x: x and 'film-title' in ' '.join(x) if x else False)
+                    if title_elem:
+                        title = title_elem.get_text(strip=True)
+                
+                # Method 1b: Look for any element with film-title or similar in text content
+                if not title:
+                    title_elem = item.find(class_=lambda x: x and any(word in ' '.join(x).lower() for word in ['film-title', 'film-name', 'title']) if x else False)
                     if title_elem:
                         title = title_elem.get_text(strip=True)
                 
