@@ -858,14 +858,15 @@ function displayResults(data) {
             movieDiv.className = 'text-center flex flex-col min-h-0';
             const posterUrl = movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster';
             movieDiv.innerHTML = `
-                <div class="relative flex-shrink-0 mb-1 flex-1 min-h-0 flex items-center justify-center">
-                    <div class="absolute -top-0.5 -left-0.5 z-10 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-[10px] sm:text-xs shadow-lg">
+                <div class="relative flex-shrink-0 mb-1 flex-1 min-h-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded">
+                    <div class="absolute top-1 left-1 z-20 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-lg border-2 border-white dark:border-gray-900">
                         ${rank}
                     </div>
                     <img src="${posterUrl}" 
                          alt="${movie.title}"
                          class="w-full h-full object-contain rounded max-h-full"
                          style="max-height: 100%;"
+                         crossorigin="anonymous"
                          onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
                 </div>
                 <p class="text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto px-0.5">${movie.title}</p>
@@ -1028,13 +1029,54 @@ function getShareText() {
     return `Check out my movie rankings! View them here: ${getShareUrl()}`;
 }
 
-function shareToTwitter() {
-    const text = encodeURIComponent(getShareText());
-    const url = `https://x.com/intent/tweet?text=${text}`;
-    window.open(url, '_blank', 'width=550,height=420');
+async function shareToTwitter() {
+    // Generate image first, then share
+    if (shareCardPreview && typeof html2canvas !== 'undefined') {
+        showMessage('Generating image for sharing...', 'info');
+        try {
+            const imageDataUrl = await generateShareImage();
+            if (imageDataUrl) {
+                // For X/Twitter, we can't directly attach images via URL
+                // So we'll share the text with a link, and user can download/attach the image manually
+                const text = encodeURIComponent(getShareText() + '\n\nDownload the image below to share!');
+                const url = `https://x.com/intent/tweet?text=${text}`;
+                window.open(url, '_blank', 'width=550,height=420');
+                // Also trigger download so they can attach it
+                setTimeout(() => downloadShareImage(), 500);
+            } else {
+                // Fallback to text-only share
+                const text = encodeURIComponent(getShareText());
+                const url = `https://x.com/intent/tweet?text=${text}`;
+                window.open(url, '_blank', 'width=550,height=420');
+            }
+        } catch (e) {
+            console.error('Failed to generate image:', e);
+            // Fallback to text-only share
+            const text = encodeURIComponent(getShareText());
+            const url = `https://x.com/intent/tweet?text=${text}`;
+            window.open(url, '_blank', 'width=550,height=420');
+        }
+    } else {
+        const text = encodeURIComponent(getShareText());
+        const url = `https://x.com/intent/tweet?text=${text}`;
+        window.open(url, '_blank', 'width=550,height=420');
+    }
 }
 
-function shareToFacebook() {
+async function shareToFacebook() {
+    // Generate image first, then share
+    if (shareCardPreview && typeof html2canvas !== 'undefined') {
+        showMessage('Generating image for sharing...', 'info');
+        try {
+            const imageDataUrl = await generateShareImage();
+            if (imageDataUrl) {
+                // Trigger download so they can attach it
+                setTimeout(() => downloadShareImage(), 500);
+            }
+        } catch (e) {
+            console.error('Failed to generate image:', e);
+        }
+    }
     const url = encodeURIComponent(getShareUrl());
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=550,height=420');
 }
@@ -1061,6 +1103,25 @@ function copyShareLink() {
     });
 }
 
+// Convert image to data URL to avoid CORS issues
+function imageToDataUrl(img) {
+    return new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        
+        try {
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL('image/png');
+            resolve(dataUrl);
+        } catch (e) {
+            // If CORS fails, try to load via proxy or use placeholder
+            resolve(img.src);
+        }
+    });
+}
+
 function downloadShareImage() {
     if (!shareCardPreview) return;
     
@@ -1073,14 +1134,32 @@ function downloadShareImage() {
     // Wait a bit for images to load, then generate
     showMessage('Generating image... This may take a moment.', 'info');
     
-    // Wait for images to load
+    // Convert all images to data URLs to avoid CORS issues
     const images = shareCardPreview.querySelectorAll('img');
-    const imagePromises = Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-            img.onload = resolve;
+    const imagePromises = Array.from(images).map(async (img) => {
+        if (img.complete && img.naturalHeight !== 0) {
+            try {
+                const dataUrl = await imageToDataUrl(img);
+                img.setAttribute('data-src', img.src);
+                img.src = dataUrl;
+            } catch (e) {
+                console.warn('Failed to convert image:', e);
+            }
+            return Promise.resolve();
+        }
+        return new Promise((resolve) => {
+            img.onload = async () => {
+                try {
+                    const dataUrl = await imageToDataUrl(img);
+                    img.setAttribute('data-src', img.src);
+                    img.src = dataUrl;
+                } catch (e) {
+                    console.warn('Failed to convert image:', e);
+                }
+                resolve();
+            };
             img.onerror = resolve; // Continue even if some images fail
-            setTimeout(resolve, 2000); // Timeout after 2 seconds
+            setTimeout(resolve, 3000); // Timeout after 3 seconds
         });
     });
     
@@ -1090,9 +1169,10 @@ function downloadShareImage() {
         
         setTimeout(() => {
             html2canvas(shareCardPreview, {
-                backgroundColor: '#0a0a0f',
+                backgroundColor: null,
                 scale: 2,
-                useCORS: true,
+                useCORS: false,
+                allowTaint: true,
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
