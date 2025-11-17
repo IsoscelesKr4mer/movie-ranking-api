@@ -377,6 +377,13 @@ async function importLetterboxdList() {
         showLoading(true);
         showMessage('Parsing and importing Letterboxd list...', 'info');
 
+        // Check if function exists
+        if (typeof window.runLetterboxdImport !== 'function') {
+            showMessage('Letterboxd importer not loaded. Please refresh the page.', 'error');
+            showLoading(false);
+            return;
+        }
+
         await window.runLetterboxdImport(letterboxdUrl);
 
         // After importToSession completes, we should have loadedMovies populated from server

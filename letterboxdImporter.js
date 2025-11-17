@@ -310,7 +310,15 @@
     }
   }
 
+  // Expose function to window immediately
   window.runLetterboxdImport = runLetterboxdImport;
 })();
+
+// Also expose it outside the IIFE to ensure it's available
+if (typeof window !== 'undefined') {
+  window.runLetterboxdImport = window.runLetterboxdImport || function() {
+    console.error('runLetterboxdImport not initialized. Check script loading order.');
+  };
+}
 
 
