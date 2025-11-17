@@ -749,10 +749,8 @@ async function makeChoice(choice) {
             comparisonContainer.classList.add('hidden');
             // Re-enable body scroll
             document.body.classList.remove('overflow-hidden');
-            const rankingControls = document.getElementById('ranking-controls');
-            if (rankingControls) {
-                rankingControls.classList.remove('hidden');
-            }
+            // Hide ranking section when showing results
+            if (rankingSection) rankingSection.classList.add('hidden');
             displayResults(data.results);
             resultsSection.classList.remove('hidden');
             // Scroll to results
