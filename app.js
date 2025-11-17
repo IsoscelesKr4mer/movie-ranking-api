@@ -320,7 +320,8 @@ async function createSessionAndLoadMovies() {
         loadedMovies = loadData.movies || [];
         sessionStatusSpan.textContent = `Loaded ${loadData.loaded_count} movies`;
         
-        // Show selection section instead of going straight to ranking
+        // Hide setup section and show selection section
+        configSection.classList.add('hidden');
         selectionSection.classList.remove('hidden');
         displayMoviesForSelection(loadedMovies);
         selectedMovieIds.clear();
