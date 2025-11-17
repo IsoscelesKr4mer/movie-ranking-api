@@ -366,13 +366,18 @@ async function confirmSelection() {
             { movie_ids: movieIdsArray }
         );
         
-        showMessage(`Selected ${data.selected_count} movies! Ready to rank.`, 'success');
+        showMessage(`Selected ${data.selected_count} movies! Starting ranking...`, 'success');
         
         // Hide selection section and show ranking section
         selectionSection.classList.add('hidden');
         rankingSection.classList.remove('hidden');
         
         showLoading(false);
+        
+        // Auto-start ranking after selection
+        setTimeout(() => {
+            startRanking();
+        }, 500);
         
     } catch (error) {
         showLoading(false);
@@ -393,9 +398,14 @@ async function startRanking() {
         if (data.comparison) {
             currentComparison = data.comparison;
             displayComparison(data.comparison, data.status);
-            showMessage('Ranking started!', 'success');
+            // Don't show message - comparison is visible
         } else {
             showMessage('No movies to rank', 'error');
+            document.body.style.overflow = '';
+            const rankingControls = document.getElementById('ranking-controls');
+            if (rankingControls) {
+                rankingControls.classList.remove('hidden');
+            }
         }
         showLoading(false);
 
@@ -448,7 +458,18 @@ function displayComparison(comparison, status) {
         progressSpan.textContent = `Progress: ${progress} / ${total} movies ranked`;
     }
 
+    // Hide controls and show comparison
+    const rankingControls = document.getElementById('ranking-controls');
+    if (rankingControls) {
+        rankingControls.classList.add('hidden');
+    }
     comparisonContainer.classList.remove('hidden');
+    
+    // Prevent body scroll when comparison is active
+    document.body.style.overflow = 'hidden';
+    
+    // Scroll to top to show comparison
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 async function makeChoice(choice) {
@@ -468,22 +489,34 @@ async function makeChoice(choice) {
         if (data.message === 'Ranking complete' && data.results) {
             // Ranking is complete!
             showMessage('Ranking complete!', 'success');
-            displayResults(data.results);
             comparisonContainer.classList.add('hidden');
+            // Re-enable body scroll
+            document.body.style.overflow = '';
+            const rankingControls = document.getElementById('ranking-controls');
+            if (rankingControls) {
+                rankingControls.classList.remove('hidden');
+            }
+            displayResults(data.results);
             resultsSection.classList.remove('hidden');
+            // Scroll to results
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
         } else if (data.comparison) {
             // Continue with next comparison
             currentComparison = data.comparison;
             displayComparison(data.comparison, data.status);
-            showMessage(`Choice recorded! (${choice})`, 'info');
+            // Don't show message for every choice to reduce clutter
         } else {
             showMessage('Unexpected response from server', 'error');
+            document.body.style.overflow = '';
         }
 
         showLoading(false);
 
     } catch (error) {
         showLoading(false);
+        document.body.style.overflow = '';
         console.error('Failed to make choice:', error);
     }
 }
@@ -634,10 +667,16 @@ function reset() {
         selectionSection.classList.add('hidden');
         rankingSection.classList.add('hidden');
         comparisonContainer.classList.add('hidden');
+        document.body.style.overflow = '';
+        const rankingControls = document.getElementById('ranking-controls');
+        if (rankingControls) {
+            rankingControls.classList.remove('hidden');
+        }
         resultsSection.classList.add('hidden');
         resultsContainer.innerHTML = '';
         moviesSelectionGrid.innerHTML = '';
         updateSelectedCount();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         showMessage('Session reset', 'info');
     }
 }
