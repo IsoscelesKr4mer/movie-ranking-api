@@ -107,6 +107,10 @@
     window.loadedMovies = setResp.movies || [];
     document.getElementById('selection-section').classList.remove('hidden');
     if (typeof displayMoviesForSelection === 'function') {
+      const configSection = document.getElementById('config-section');
+      const selectionSection = document.getElementById('selection-section');
+      if (configSection) configSection.classList.add('hidden');
+      if (selectionSection) selectionSection.classList.remove('hidden');
       displayMoviesForSelection(window.loadedMovies);
     } else {
       renderPreview(movies); // Pass the original movies array to renderPreview
