@@ -1151,53 +1151,72 @@ async function imageToDataUrl(img) {
         return img.src;
     }
     
+    // List of CORS proxies to try (in order of preference)
+    const proxies = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(img.src)}`,
+        `https://corsproxy.io/?${encodeURIComponent(img.src)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(img.src)}`
+    ];
+    
+    // Try direct fetch first
     try {
-        // Try to fetch the image
         const response = await fetch(img.src, { mode: 'cors' });
         if (response.ok) {
             const blob = await response.blob();
             return new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
-                reader.onerror = () => {
-                    // Fallback: try canvas approach (but this might fail with CORS)
-                    try {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = img.naturalWidth || img.width || 300;
-                        canvas.height = img.naturalHeight || img.height || 450;
-                        ctx.drawImage(img, 0, 0);
-                        resolve(canvas.toDataURL('image/png'));
-                    } catch (e) {
-                        // Return original if all fails
-                        resolve(img.src);
-                    }
-                };
+                reader.onerror = () => resolve(null); // Try proxy instead
                 reader.readAsDataURL(blob);
             });
         }
     } catch (e) {
-        // If fetch fails (CORS), try using a proxy
+        // Direct fetch failed, try proxies
+    }
+    
+    // Try each proxy in order
+    for (const proxyUrl of proxies) {
         try {
-            // Use a CORS proxy (you can replace this with your own proxy endpoint)
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(img.src)}`;
-            const response = await fetch(proxyUrl);
-            if (response.ok) {
-                const data = await response.json();
-                const imgResponse = await fetch(data.contents);
-                const blob = await imgResponse.blob();
+            let response;
+            let blob;
+            
+            if (proxyUrl.includes('allorigins.win')) {
+                // allorigins.win returns JSON with contents
+                response = await fetch(proxyUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    const imgResponse = await fetch(data.contents);
+                    blob = await imgResponse.blob();
+                } else {
+                    continue; // Try next proxy
+                }
+            } else {
+                // Other proxies return the image directly
+                response = await fetch(proxyUrl);
+                if (response.ok) {
+                    blob = await response.blob();
+                } else {
+                    continue; // Try next proxy
+                }
+            }
+            
+            if (blob) {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onload = () => resolve(reader.result);
-                    reader.onerror = () => resolve(img.src);
+                    reader.onerror = () => resolve(null); // Try next proxy
                     reader.readAsDataURL(blob);
                 });
             }
         } catch (proxyError) {
-            console.warn('Failed to fetch image via proxy:', proxyError);
+            // Try next proxy
+            continue;
         }
     }
-    return img.src; // Fallback to original
+    
+    // All methods failed, return original (will cause tainted canvas but at least we tried)
+    console.warn('Could not convert image to data URL, will use original (may cause tainted canvas):', img.src);
+    return img.src;
 }
 
 // Load image and convert to data URL for html2canvas
@@ -1210,38 +1229,39 @@ async function ensureImageLoaded(img) {
         }
         
         // Wait for image to load (even if CORS fails, it may still display)
-        if (img.complete && img.naturalHeight !== 0 && img.naturalWidth !== 0) {
-            // Image is loaded, try to convert to data URL for html2canvas
+        const convertImage = async () => {
             try {
                 const dataUrl = await imageToDataUrl(img);
-                if (dataUrl && dataUrl !== img.src && dataUrl.startsWith('data:')) {
+                if (dataUrl && dataUrl.startsWith('data:')) {
+                    // Successfully converted to data URL
+                    img.setAttribute('data-original-src', img.src);
+                    img.src = dataUrl;
+                } else if (dataUrl && dataUrl !== img.src) {
+                    // Got a different URL (maybe from proxy), use it
                     img.setAttribute('data-original-src', img.src);
                     img.src = dataUrl;
                 }
+                // If dataUrl === img.src, conversion failed, keep original
             } catch (e) {
                 // Keep original src if conversion fails - image will still display
                 console.warn('Failed to convert image (will use original):', e);
             }
+        };
+        
+        if (img.complete && img.naturalHeight !== 0 && img.naturalWidth !== 0) {
+            // Image is already loaded
+            await convertImage();
             resolve();
             return;
         }
         
         const timeout = setTimeout(() => {
             resolve(); // Resolve anyway after timeout
-        }, 5000);
+        }, 10000); // Increased timeout for proxy requests
         
         img.onload = async () => {
             clearTimeout(timeout);
-            try {
-                const dataUrl = await imageToDataUrl(img);
-                if (dataUrl && dataUrl !== img.src && dataUrl.startsWith('data:')) {
-                    img.setAttribute('data-original-src', img.src);
-                    img.src = dataUrl;
-                }
-            } catch (e) {
-                // Keep original src if conversion fails - image will still display
-                console.warn('Failed to convert image (will use original):', e);
-            }
+            await convertImage();
             resolve();
         };
         
@@ -1284,8 +1304,8 @@ function downloadShareImage() {
             html2canvas(shareCardPreview, {
                 backgroundColor: null,
                 scale: 2,
-                useCORS: false,
-                allowTaint: true,
+                useCORS: true, // Now that images are data URLs, we can use CORS
+                allowTaint: false, // No taint since images are data URLs
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
@@ -1327,8 +1347,8 @@ async function generateShareImage() {
             html2canvas(shareCardPreview, {
                 backgroundColor: null,
                 scale: 2,
-                useCORS: false,
-                allowTaint: true,
+                useCORS: true, // Now that images are data URLs, we can use CORS
+                allowTaint: false, // No taint since images are data URLs
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
