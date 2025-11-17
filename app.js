@@ -832,9 +832,6 @@ function displayResults(data) {
 
     const rankedMovies = data.ranked_movies || [];
     
-    // Hide ranking section when showing results
-    if (rankingSection) rankingSection.classList.add('hidden');
-    
     // Store for sharing
     window.lastRankedMovies = rankedMovies;
     
