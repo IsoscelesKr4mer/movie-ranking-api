@@ -248,7 +248,37 @@
         
         .masonry-item {
             break-inside: avoid;
-            margin-bottom: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        /* Smaller masonry grid for selection */
+        #movies-selection-grid.masonry-grid {
+            column-count: 3;
+            column-gap: 0.5rem;
+        }
+        
+        @media (min-width: 640px) {
+            #movies-selection-grid.masonry-grid {
+                column-count: 4;
+            }
+        }
+        
+        @media (min-width: 768px) {
+            #movies-selection-grid.masonry-grid {
+                column-count: 5;
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            #movies-selection-grid.masonry-grid {
+                column-count: 6;
+            }
+        }
+        
+        @media (min-width: 1280px) {
+            #movies-selection-grid.masonry-grid {
+                column-count: 7;
+            }
         }
         
         /* Modern scrollbar */
@@ -543,19 +573,29 @@
 
             <!-- Selection Section -->
             <section id="selection-section" class="hidden mb-8">
-                <div class="modern-card rounded-3xl p-6 sm:p-8 mb-6 animate-fade-in-up">
-                    <h2 class="text-2xl font-semibold mb-2 text-black dark:text-white">Select Movies You've Seen</h2>
-                    <p class="text-gray-600 dark:text-gray-400 text-sm mb-6">Click on the movies you've watched. Selected movies will be highlighted.</p>
+                <div class="modern-card rounded-2xl p-4 sm:p-6 mb-4 animate-fade-in-up">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 class="text-xl font-semibold mb-1 text-black dark:text-white">Select Movies You've Seen</h2>
+                            <p class="text-gray-600 dark:text-gray-400 text-xs">Click on the movies you've watched</p>
+                        </div>
+                        <button id="back-from-selection-btn" class="px-3 py-2 bg-gray-600/20 border border-gray-500/30 text-gray-300 rounded-lg hover:bg-gray-600/30 transition-smooth text-sm font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                            </svg>
+                            Back
+                        </button>
+                    </div>
                     
-                    <div class="flex flex-wrap gap-3 mb-6">
-                        <button id="select-all-btn" class="px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-600/30 transition-smooth text-sm font-medium">
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <button id="select-all-btn" class="px-3 py-1.5 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-600/30 transition-smooth text-xs font-medium">
                             Select All
                         </button>
-                        <button id="deselect-all-btn" class="px-4 py-2 bg-gray-600/20 border border-gray-500/30 text-gray-300 rounded-lg hover:bg-gray-600/30 transition-smooth text-sm font-medium">
+                        <button id="deselect-all-btn" class="px-3 py-1.5 bg-gray-600/20 border border-gray-500/30 text-gray-300 rounded-lg hover:bg-gray-600/30 transition-smooth text-xs font-medium">
                             Deselect All
                         </button>
-                        <button id="confirm-selection-btn" class="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-smooth text-sm font-medium neumorphic">
-                            Start Ranking with Selected (<span id="selected-count">0</span>)
+                        <button id="confirm-selection-btn" class="px-4 py-1.5 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-smooth text-xs font-medium">
+                            Start Ranking (<span id="selected-count">0</span>)
                         </button>
                     </div>
                 </div>

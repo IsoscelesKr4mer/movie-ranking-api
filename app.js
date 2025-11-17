@@ -40,6 +40,7 @@ const resultsContainer = document.getElementById('results-container');
 const progressSpan = document.getElementById('comparison-progress');
 const backToHomeBtn = document.getElementById('back-to-home-btn');
 const backToHomeFromResultsBtn = document.getElementById('back-to-home-from-results-btn');
+const backFromSelectionBtn = document.getElementById('back-from-selection-btn');
 const rankingIdDisplay = document.getElementById('ranking-id-display');
 const resultsRankingId = document.getElementById('results-ranking-id');
 const shareTwitterBtn = document.getElementById('share-twitter-btn');
@@ -68,6 +69,7 @@ getResultsBtn.addEventListener('click', getResults);
 resetBtn.addEventListener('click', reset);
 if (backToHomeBtn) backToHomeBtn.addEventListener('click', goBackToHome);
 if (backToHomeFromResultsBtn) backToHomeFromResultsBtn.addEventListener('click', goBackToHome);
+if (backFromSelectionBtn) backFromSelectionBtn.addEventListener('click', goBackToHome);
 if (shareTwitterBtn) shareTwitterBtn.addEventListener('click', shareToTwitter);
 if (shareFacebookBtn) shareFacebookBtn.addEventListener('click', shareToFacebook);
 if (shareEmailBtn) shareEmailBtn.addEventListener('click', shareViaEmail);
@@ -424,10 +426,10 @@ function displayMoviesForSelection(movies) {
                 </div>
                 <img src="${posterUrl}" 
                      alt="${movie.title}"
-                     class="w-full h-auto max-h-[200px] object-contain neumorphic"
+                     class="w-full h-auto max-h-[140px] object-contain neumorphic"
                      onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
-                <div class="p-2">
-                    <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${movie.title}</h5>
+                <div class="p-1.5">
+                    <h5 class="text-xs font-semibold text-black dark:text-white mb-0.5 line-clamp-2 min-h-[2rem] leading-tight">${movie.title}</h5>
                     <p class="text-xs text-gray-600 dark:text-gray-400">${year}</p>
                 </div>
             </div>
