@@ -2688,9 +2688,10 @@ function saveCustomListFromForm() {
     if (!items) return;
     
     const listName = customListNameInput.value.trim();
+    const shareAsCommunity = document.getElementById('share-as-community')?.checked || false;
     
     // Save the list
-    saveCustomList(listName, items);
+    saveCustomList(listName, items, shareAsCommunity);
 }
 
 function loadCustomList() {
