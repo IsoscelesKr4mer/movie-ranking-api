@@ -704,14 +704,10 @@ function displayComparison(comparison, status) {
         rankingIdDisplay.textContent = sessionId;
     }
 
-    // Hide config section and controls, show comparison
+    // Hide config section, show comparison
     const configSection = document.getElementById('config-section');
     if (configSection) {
         configSection.classList.add('hidden');
-    }
-    const rankingControls = document.getElementById('ranking-controls');
-    if (rankingControls) {
-        rankingControls.classList.add('hidden');
     }
     comparisonContainer.classList.remove('hidden');
     
@@ -1019,18 +1015,45 @@ function getShareText() {
 }
 
 async function shareToTwitter() {
-    // Generate image first, then share
+    // Generate image first, then upload and share
     if (shareCardPreview && typeof html2canvas !== 'undefined') {
         showMessage('Generating image for sharing...', 'info');
         try {
             const imageDataUrl = await generateShareImage();
             if (imageDataUrl) {
-                // For X/Twitter, we can't directly attach images via URL
-                // So we'll share the text with a link, and user can download/attach the image manually
-                const text = encodeURIComponent(getShareText() + '\n\nDownload the image below to share!');
+                // Upload image to imgur for sharing
+                try {
+                    const blob = await (await fetch(imageDataUrl)).blob();
+                    const formData = new FormData();
+                    formData.append('image', blob);
+                    
+                    const uploadResponse = await fetch('https://api.imgur.com/3/image', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Client-ID 546c25a59c58ad7' // Public imgur client ID
+                        },
+                        body: formData
+                    });
+                    
+                    if (uploadResponse.ok) {
+                        const uploadData = await uploadResponse.json();
+                        if (uploadData.success && uploadData.data && uploadData.data.link) {
+                            const imageUrl = uploadData.data.link;
+                            const text = encodeURIComponent(getShareText());
+                            const url = `https://x.com/intent/tweet?text=${text}&url=${encodeURIComponent(imageUrl)}`;
+                            window.open(url, '_blank', 'width=550,height=420');
+                            showMessage('Image uploaded! Opening X to share...', 'success');
+                            return;
+                        }
+                    }
+                } catch (uploadError) {
+                    console.warn('Failed to upload to imgur:', uploadError);
+                }
+                
+                // Fallback: download image and share text
+                const text = encodeURIComponent(getShareText() + '\n\nCheck out the image below!');
                 const url = `https://x.com/intent/tweet?text=${text}`;
                 window.open(url, '_blank', 'width=550,height=420');
-                // Also trigger download so they can attach it
                 setTimeout(() => downloadShareImage(), 500);
             } else {
                 // Fallback to text-only share
