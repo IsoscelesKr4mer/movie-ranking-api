@@ -167,6 +167,25 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #3a3a4e;
         }
+        
+        /* Share card scrollbar */
+        #share-card-all-movies::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #share-card-all-movies::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 3px;
+        }
+        
+        #share-card-all-movies::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        #share-card-all-movies::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
     </style>
 </head>
 <body class="text-gray-100">
@@ -386,11 +405,14 @@
                                     Download Image
                                 </button>
                             </div>
-                            <div id="share-card-preview" class="mt-4 p-6 bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-xl border border-white/10">
-                                <h4 class="text-2xl font-bold text-white mb-2">My Movie Rankings</h4>
-                                <p class="text-gray-300 mb-4">Check out my top movie picks!</p>
-                                <div id="share-card-top-movies" class="grid grid-cols-3 gap-3">
-                                    <!-- Top 3 movies will be inserted here -->
+                            <div id="share-card-preview" class="mt-4 p-4 sm:p-6 bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded-xl border border-white/10">
+                                <div class="text-center mb-4">
+                                    <h4 class="text-xl sm:text-2xl font-bold text-white mb-2">My Movie Rankings</h4>
+                                    <p class="text-sm sm:text-base text-gray-300">Check out my complete ranking!</p>
+                                    <p class="text-xs text-gray-400 mt-1">Ranking ID: <span id="share-card-ranking-id" class="font-mono text-purple-300"></span></p>
+                                </div>
+                                <div id="share-card-all-movies" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 max-h-[60vh] overflow-y-auto">
+                                    <!-- All ranked movies will be inserted here -->
                                 </div>
                             </div>
                         </div>

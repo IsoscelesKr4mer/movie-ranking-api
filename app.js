@@ -47,7 +47,8 @@ const shareEmailBtn = document.getElementById('share-email-btn');
 const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
 const downloadImageBtn = document.getElementById('download-image-btn');
 const shareCardPreview = document.getElementById('share-card-preview');
-const shareCardTopMovies = document.getElementById('share-card-top-movies');
+const shareCardAllMovies = document.getElementById('share-card-all-movies');
+const shareCardRankingId = document.getElementById('share-card-ranking-id');
 
 // Event Listeners
 
@@ -613,22 +614,33 @@ function displayResults(data) {
         resultsRankingId.textContent = sessionId;
     }
     
-    // Update share card with top 3 movies
-    if (shareCardTopMovies && rankedMovies.length > 0) {
-        shareCardTopMovies.innerHTML = '';
-        const top3 = rankedMovies.slice(0, 3);
-        top3.forEach((movie, idx) => {
+    // Update share card with all ranked movies
+    if (shareCardAllMovies && rankedMovies.length > 0) {
+        shareCardAllMovies.innerHTML = '';
+        
+        // Update share card ranking ID
+        if (shareCardRankingId && sessionId) {
+            shareCardRankingId.textContent = sessionId;
+        }
+        
+        rankedMovies.forEach((movie, idx) => {
+            const rank = idx + 1;
             const movieDiv = document.createElement('div');
             movieDiv.className = 'text-center';
+            const posterUrl = movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster';
             movieDiv.innerHTML = `
-                <div class="text-2xl font-bold text-white mb-1">#${idx + 1}</div>
-                <img src="${movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
-                     alt="${movie.title}"
-                     class="w-full rounded-lg mb-2 neumorphic"
-                     onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
-                <p class="text-xs text-gray-300 line-clamp-2">${movie.title}</p>
+                <div class="relative">
+                    <div class="absolute -top-1 -left-1 z-10 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm shadow-lg">
+                        ${rank}
+                    </div>
+                    <img src="${posterUrl}" 
+                         alt="${movie.title}"
+                         class="w-full rounded-lg mb-1 sm:mb-2 neumorphic"
+                         onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
+                </div>
+                <p class="text-xs sm:text-sm text-gray-300 line-clamp-2 font-medium">${movie.title}</p>
             `;
-            shareCardTopMovies.appendChild(movieDiv);
+            shareCardAllMovies.appendChild(movieDiv);
         });
     }
 
@@ -824,22 +836,45 @@ function downloadShareImage() {
         return;
     }
     
-    showMessage('Generating image...', 'info');
+    // Wait a bit for images to load, then generate
+    showMessage('Generating image... This may take a moment.', 'info');
     
-    html2canvas(shareCardPreview, {
-        backgroundColor: '#0a0a0f',
-        scale: 2,
-        useCORS: true,
-        logging: false
-    }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `movie-ranking-${sessionId || 'ranking'}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-        showMessage('Image downloaded!', 'success');
-    }).catch(err => {
-        console.error('Error generating image:', err);
-        showMessage('Failed to generate image. Make sure all images are loaded.', 'error');
+    // Wait for images to load
+    const images = shareCardPreview.querySelectorAll('img');
+    const imagePromises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = resolve; // Continue even if some images fail
+            setTimeout(resolve, 2000); // Timeout after 2 seconds
+        });
+    });
+    
+    Promise.all(imagePromises).then(() => {
+        // Scroll to top of share card for better image capture
+        shareCardPreview.scrollIntoView({ behavior: 'auto', block: 'start' });
+        
+        setTimeout(() => {
+            html2canvas(shareCardPreview, {
+                backgroundColor: '#0a0a0f',
+                scale: 2,
+                useCORS: true,
+                logging: false,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: shareCardPreview.scrollWidth,
+                windowHeight: shareCardPreview.scrollHeight
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `movie-ranking-${sessionId || 'ranking'}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showMessage('Image downloaded!', 'success');
+            }).catch(err => {
+                console.error('Error generating image:', err);
+                showMessage('Failed to generate image. Make sure all images are loaded.', 'error');
+            });
+        }, 500);
     });
 }
 
