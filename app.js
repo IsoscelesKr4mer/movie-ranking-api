@@ -320,12 +320,32 @@ async function createSessionAndLoadMovies() {
         loadedMovies = loadData.movies || [];
         sessionStatusSpan.textContent = `Loaded ${loadData.loaded_count} movies`;
         
+        if (!loadedMovies || loadedMovies.length === 0) {
+            showMessage('No movies were loaded. Please try a different category or year.', 'error');
+            showLoading(false);
+            return;
+        }
+        
         // Hide setup section and show selection section
         configSection.classList.add('hidden');
         selectionSection.classList.remove('hidden');
+        
+        // Ensure movies grid is visible
+        if (!moviesSelectionGrid) {
+            console.error('movies-selection-grid element not found!');
+            showMessage('Error: Movies grid element not found', 'error');
+            showLoading(false);
+            return;
+        }
+        
         displayMoviesForSelection(loadedMovies);
         selectedMovieIds.clear();
         updateSelectedCount();
+        
+        // Scroll to selection section
+        setTimeout(() => {
+            selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
         
         showMessage(`Loaded ${loadData.loaded_count} movies! Select the ones you have seen.`, 'success');
         showLoading(false);
@@ -367,6 +387,17 @@ async function importLetterboxdList() {
 }
 
 function displayMoviesForSelection(movies) {
+    if (!moviesSelectionGrid) {
+        console.error('moviesSelectionGrid is null!');
+        return;
+    }
+    
+    if (!movies || movies.length === 0) {
+        console.warn('No movies to display');
+        moviesSelectionGrid.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-center py-8">No movies found.</p>';
+        return;
+    }
+    
     moviesSelectionGrid.innerHTML = '';
     
     movies.forEach((movie, index) => {
