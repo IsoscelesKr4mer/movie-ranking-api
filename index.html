@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Ranking App</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@radix-ui/react-slot/dist/index.umd.js"></script>
+    <script src="https://unpkg.com/lottie-web@5.12.2/build/player/lottie.min.js"></script>
     <script>
         // Simple animation helper with CSS fallback
         window.Motion = {
@@ -63,22 +65,53 @@
         }
         
         body {
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            background: #000000;
             min-height: 100vh;
         }
         
-        /* Glassmorphism effect */
+        /* Minimalist cinematic UI */
         .glass {
-            background: rgba(26, 26, 46, 0.6);
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
         
         .glass-hover:hover {
-            background: rgba(26, 26, 46, 0.8);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateY(-4px);
+            background: rgba(0, 0, 0, 0.6);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        /* Glowing poster borders on hover */
+        .poster-glow {
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .poster-glow img {
+            border-radius: 8px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .poster-glow:hover img {
+            box-shadow: 
+                0 0 20px rgba(255, 255, 255, 0.3),
+                0 0 40px rgba(255, 255, 255, 0.2),
+                0 0 60px rgba(255, 255, 255, 0.1);
+            transform: scale(1.02);
+        }
+        
+        .poster-glow:hover::before {
+            content: '';
+            position: absolute;
+            inset: -2px;
+            border-radius: 10px;
+            padding: 2px;
+            background: linear-gradient(45deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            pointer-events: none;
         }
         
         /* Neumorphic shadows */
@@ -94,7 +127,26 @@
                 inset -4px -4px 8px rgba(255, 255, 255, 0.02);
         }
         
-        /* Masonry grid */
+        /* CSS Grid for ranked list */
+        .ranked-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        @media (min-width: 640px) {
+            .ranked-grid {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .ranked-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+        }
+        
+        /* Masonry grid for selection (keep for now) */
         .masonry-grid {
             column-count: 1;
             column-gap: 1rem;
@@ -186,15 +238,59 @@
         #share-card-all-movies::-webkit-scrollbar-thumb:hover {
             background: rgba(255, 255, 255, 0.3);
         }
+        
+        /* Lottie spinner container */
+        #lottie-spinner {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto;
+        }
+        
+        /* Minimalist button styles */
+        .btn-minimal {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .btn-minimal:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+        }
+        
+        .btn-minimal:focus {
+            outline: 2px solid rgba(255, 255, 255, 0.5);
+            outline-offset: 2px;
+        }
+        
+        /* Radix UI accessibility improvements */
+        [role="button"],
+        button {
+            cursor: pointer;
+        }
+        
+        [role="button"]:disabled,
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
+        /* Focus visible for keyboard navigation */
+        *:focus-visible {
+            outline: 2px solid rgba(255, 255, 255, 0.6);
+            outline-offset: 2px;
+        }
     </style>
 </head>
 <body class="text-gray-100">
     <div class="min-h-screen pb-12">
         <!-- Header -->
-        <header class="glass border-b border-white/10 sticky top-0 z-50 backdrop-blur-xl">
+        <header class="border-b border-white/5 sticky top-0 z-50 backdrop-blur-sm bg-black/50">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-                <h1 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                    🎬 Movie Ranker
+                <h1 class="text-3xl sm:text-4xl font-bold text-white">
+                    Movie Ranker
                 </h1>
                 <p class="text-gray-400 mt-2 text-sm sm:text-base">Rank your favorite movies using binary comparisons</p>
             </div>
@@ -230,7 +326,7 @@
                         </div>
                     </div>
                     
-                    <button id="create-session-btn" class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-smooth neumorphic">
+                    <button id="create-session-btn" class="w-full sm:w-auto px-6 py-3 btn-minimal text-white font-semibold rounded-lg" role="button" aria-label="Create session and load movies">
                         Create Session & Load Movies
                     </button>
                     
@@ -246,7 +342,7 @@
                     <div>
                         <label for="letterboxd-url" class="block text-sm font-medium text-gray-300 mb-2">Import Letterboxd List:</label>
                         <input type="text" id="letterboxd-url" placeholder="https://letterboxd.com/.../share/..." class="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-lg text-white mb-3 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
-                        <button id="import-letterboxd-btn" class="w-full sm:w-auto px-6 py-3 bg-dark-surface border border-white/10 text-white font-semibold rounded-lg hover:bg-dark-card transition-smooth neumorphic">
+                        <button id="import-letterboxd-btn" class="w-full sm:w-auto px-6 py-3 btn-minimal text-white font-semibold rounded-lg" role="button" aria-label="Import Letterboxd list">
                             Parse & Import Letterboxd List
                         </button>
                         <p class="text-xs text-gray-400 mt-2">Public lists only. Any share link works.</p>
@@ -285,7 +381,7 @@
             <!-- Ranking Section -->
             <section id="ranking-section" class="hidden mb-8">
                 <!-- Current Comparison - Sticky to viewport -->
-                <div id="comparison-container" class="hidden fixed inset-x-0 top-20 bottom-0 z-40 overflow-y-auto bg-dark-bg/95 backdrop-blur-sm">
+                <div id="comparison-container" class="hidden fixed inset-x-0 top-20 bottom-0 z-40 overflow-y-auto bg-black/95 backdrop-blur-sm">
                     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
                         <div class="glass rounded-2xl p-4 sm:p-6 neumorphic">
                             <div class="flex items-center justify-between mb-4">
@@ -301,16 +397,16 @@
                                 </div>
                             </div>
                             <div class="text-center mb-4 sm:mb-6">
-                                <h3 class="text-xl sm:text-2xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                                <h3 class="text-xl sm:text-2xl font-bold mb-2 text-white">
                                     Which movie do you prefer?
                                 </h3>
                                 <p id="comparison-progress" class="text-gray-400 text-xs sm:text-sm"></p>
                             </div>
                             
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4">
-                                <div id="left-movie" class="glass rounded-xl p-4 sm:p-6 border border-white/10 transition-smooth glass-hover flex flex-col">
-                                    <div class="mb-3 sm:mb-4 flex-shrink-0 flex items-center justify-center min-h-[40vh] sm:min-h-[50vh]">
-                                        <img id="left-poster" src="" alt="Movie poster" class="max-w-full max-h-[40vh] sm:max-h-[50vh] object-contain rounded-lg neumorphic">
+                                <div id="left-movie" class="glass rounded-xl p-4 sm:p-6 border border-white/10 transition-smooth glass-hover flex flex-col" role="article">
+                                    <div class="mb-3 sm:mb-4 flex-shrink-0 flex items-center justify-center min-h-[40vh] sm:min-h-[50vh] poster-glow">
+                                        <img id="left-poster" src="" alt="Movie poster" class="max-w-full max-h-[40vh] sm:max-h-[50vh] object-contain rounded-lg">
                                     </div>
                                     <div class="mb-3 sm:mb-4 flex-grow">
                                         <h4 id="left-title" class="text-lg sm:text-xl font-semibold mb-2 text-white line-clamp-2"></h4>
@@ -323,9 +419,9 @@
                                     </button>
                                 </div>
 
-                                <div id="right-movie" class="glass rounded-xl p-4 sm:p-6 border border-white/10 transition-smooth glass-hover flex flex-col">
-                                    <div class="mb-3 sm:mb-4 flex-shrink-0 flex items-center justify-center min-h-[40vh] sm:min-h-[50vh]">
-                                        <img id="right-poster" src="" alt="Movie poster" class="max-w-full max-h-[40vh] sm:max-h-[50vh] object-contain rounded-lg neumorphic">
+                                <div id="right-movie" class="glass rounded-xl p-4 sm:p-6 border border-white/10 transition-smooth glass-hover flex flex-col" role="article">
+                                    <div class="mb-3 sm:mb-4 flex-shrink-0 flex items-center justify-center min-h-[40vh] sm:min-h-[50vh] poster-glow">
+                                        <img id="right-poster" src="" alt="Movie poster" class="max-w-full max-h-[40vh] sm:max-h-[50vh] object-contain rounded-lg">
                                     </div>
                                     <div class="mb-3 sm:mb-4 flex-grow">
                                         <h4 id="right-title" class="text-lg sm:text-xl font-semibold mb-2 text-white line-clamp-2"></h4>
@@ -368,10 +464,10 @@
                     </div>
                 </div>
 
-                <!-- Loading Indicator -->
-                <div id="loading" class="hidden text-center py-12">
-                    <div class="inline-block w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-4"></div>
-                    <p class="text-gray-400">Loading...</p>
+                <!-- Loading Indicator with Lottie -->
+                <div id="loading" class="hidden text-center py-12" role="status" aria-live="polite" aria-label="Loading">
+                    <div id="lottie-spinner"></div>
+                    <p class="text-gray-400 mt-4">Loading...</p>
                 </div>
             </section>
 
@@ -418,7 +514,7 @@
                         </div>
                     </div>
                 </div>
-                <div id="results-container" class="masonry-grid"></div>
+                <div id="results-container" class="ranked-grid"></div>
             </section>
         </div>
     </div>

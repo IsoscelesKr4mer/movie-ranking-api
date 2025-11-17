@@ -100,12 +100,102 @@ function showMessage(text, type = 'info') {
     }, 5000);
 }
 
+let lottieAnimation = null;
+
 function showLoading(show = true) {
     if (show) {
         loading.classList.remove('hidden');
         comparisonContainer.classList.add('hidden');
+        
+        // Initialize Lottie animation if not already done
+        const spinnerContainer = document.getElementById('lottie-spinner');
+        if (spinnerContainer && !lottieAnimation && typeof lottie !== 'undefined') {
+            // Use a simple loading animation JSON (we'll use a built-in one or create inline)
+            // For now, create a simple rotating circle animation
+            const animationData = {
+                "v": "5.5.7",
+                "fr": 30,
+                "ip": 0,
+                "op": 60,
+                "w": 80,
+                "h": 80,
+                "nm": "Loading",
+                "ddd": 0,
+                "assets": [],
+                "layers": [{
+                    "ddd": 0,
+                    "ind": 1,
+                    "ty": 4,
+                    "nm": "Circle",
+                    "sr": 1,
+                    "ks": {
+                        "o": {"a": 0, "k": 100},
+                        "r": {"a": 1, "k": [
+                            {"i": {"x": [0.833], "y": [0.833]}, "o": {"x": [0.167], "y": [0.167]}, "t": 0, "s": [0]},
+                            {"t": 60, "s": [360]}
+                        ]},
+                        "p": {"a": 0, "k": [40, 40, 0]},
+                        "a": {"a": 0, "k": [0, 0, 0]},
+                        "s": {"a": 0, "k": [100, 100, 100]}
+                    },
+                    "ao": 0,
+                    "shapes": [{
+                        "ty": "gr",
+                        "it": [{
+                            "d": 1,
+                            "ty": "el",
+                            "s": {"a": 0, "k": [60, 60]},
+                            "p": {"a": 0, "k": [0, 0]},
+                            "nm": "Ellipse Path 1"
+                        }, {
+                            "ty": "st",
+                            "c": {"a": 0, "k": [1, 1, 1, 1]},
+                            "o": {"a": 0, "k": 100},
+                            "w": {"a": 0, "k": 3},
+                            "lc": 1,
+                            "lj": 1,
+                            "ml": 4,
+                            "bm": 0,
+                            "nm": "Stroke 1"
+                        }, {
+                            "ty": "tr",
+                            "p": {"a": 0, "k": [0, 0]},
+                            "a": {"a": 0, "k": [0, 0]},
+                            "s": {"a": 0, "k": [100, 100]},
+                            "r": {"a": 0, "k": 0},
+                            "o": {"a": 0, "k": 100},
+                            "sk": {"a": 0, "k": 0},
+                            "sa": {"a": 0, "k": 0},
+                            "nm": "Transform"
+                        }],
+                        "nm": "Ellipse 1",
+                        "mn": "ADBE Vector Group"
+                    }],
+                    "ip": 0,
+                    "op": 60,
+                    "st": 0,
+                    "bm": 0
+                }],
+                "markers": []
+            };
+            
+            lottieAnimation = lottie.loadAnimation({
+                container: spinnerContainer,
+                renderer: 'svg',
+                loop: true,
+                autoplay: true,
+                animationData: animationData
+            });
+        } else if (spinnerContainer && !lottieAnimation) {
+            // Fallback: simple CSS spinner if Lottie not available
+            spinnerContainer.innerHTML = '<div class="inline-block w-12 h-12 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
+        }
     } else {
         loading.classList.add('hidden');
+        if (lottieAnimation) {
+            lottieAnimation.destroy();
+            lottieAnimation = null;
+        }
     }
 }
 
@@ -646,22 +736,24 @@ function displayResults(data) {
 
     rankedMovies.forEach((movie, index) => {
         const item = document.createElement('div');
-        item.className = 'masonry-item';
         const rank = index + 1;
         const posterUrl = movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
         const year = movie.release_date?.substring(0, 4) || 'N/A';
         const rating = movie.vote_average || 'N/A';
         
         item.innerHTML = `
-            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover relative">
+            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover relative" role="article" aria-label="Rank ${rank}: ${movie.title}">
                 <div class="absolute top-3 left-3 z-10 rank-badge">
-                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full w-12 h-12 flex items-center justify-center text-lg shadow-lg neumorphic">
+                    <div class="bg-white/10 backdrop-blur-sm text-white font-bold rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-sm sm:text-lg shadow-lg border border-white/20">
                         #${rank}
                     </div>
                 </div>
-                <img src="${posterUrl}" 
-                     alt="${movie.title}"
-                     class="w-full h-auto neumorphic">
+                <div class="poster-glow">
+                    <img src="${posterUrl}" 
+                         alt="${movie.title} poster"
+                         class="w-full h-auto"
+                         loading="lazy">
+                </div>
                 <div class="p-4">
                     <h4 class="text-base font-semibold text-white mb-2 line-clamp-2">${movie.title}</h4>
                     <div class="flex items-center justify-between text-sm">
