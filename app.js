@@ -1241,6 +1241,78 @@ function downloadShareImage() {
     });
 }
 
+// Helper function to generate share image and return data URL
+async function generateShareImage() {
+    if (!shareCardPreview || typeof html2canvas === 'undefined') return null;
+    
+    // Convert all images to data URLs
+    const images = shareCardPreview.querySelectorAll('img');
+    await Promise.all(Array.from(images).map(async (img) => {
+        if (img.complete && img.naturalHeight !== 0) {
+            try {
+                const dataUrl = await imageToDataUrl(img);
+                img.setAttribute('data-src', img.src);
+                img.src = dataUrl;
+            } catch (e) {
+                console.warn('Failed to convert image:', e);
+            }
+        } else {
+            await new Promise((resolve) => {
+                img.onload = async () => {
+                    try {
+                        const dataUrl = await imageToDataUrl(img);
+                        img.setAttribute('data-src', img.src);
+                        img.src = dataUrl;
+                    } catch (e) {
+                        console.warn('Failed to convert image:', e);
+                    }
+                    resolve();
+                };
+                img.onerror = resolve;
+                setTimeout(resolve, 3000);
+            });
+        }
+    }));
+    
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            html2canvas(shareCardPreview, {
+                backgroundColor: null,
+                scale: 2,
+                useCORS: false,
+                allowTaint: true,
+                logging: false,
+                scrollX: 0,
+                scrollY: 0,
+                windowWidth: shareCardPreview.scrollWidth,
+                windowHeight: shareCardPreview.scrollHeight
+            }).then(canvas => {
+                const dataUrl = canvas.toDataURL('image/png');
+                // Restore original image sources
+                images.forEach(img => {
+                    const originalSrc = img.getAttribute('data-src');
+                    if (originalSrc) {
+                        img.src = originalSrc;
+                        img.removeAttribute('data-src');
+                    }
+                });
+                resolve(dataUrl);
+            }).catch(error => {
+                console.error('Failed to generate image:', error);
+                // Restore original image sources
+                images.forEach(img => {
+                    const originalSrc = img.getAttribute('data-src');
+                    if (originalSrc) {
+                        img.src = originalSrc;
+                        img.removeAttribute('data-src');
+                    }
+                });
+                resolve(null);
+            });
+        }, 500);
+    });
+}
+
 // Initialize
 console.log('Initializing Movie Ranking App...');
 console.log('API URL:', apiUrl);
