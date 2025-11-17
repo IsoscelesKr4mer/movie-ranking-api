@@ -216,68 +216,68 @@
             }
         }
         
-        /* Masonry grid for selection (keep for now) */
+        /* Grid layout for selection (left-to-right, top-to-bottom) */
         .masonry-grid {
-            column-count: 2;
-            column-gap: 0.75rem;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.75rem;
         }
         
         @media (min-width: 640px) {
             .masonry-grid {
-                column-count: 3;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
         }
         
         @media (min-width: 768px) {
             .masonry-grid {
-                column-count: 4;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
             }
         }
         
         @media (min-width: 1024px) {
             .masonry-grid {
-                column-count: 5;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
             }
         }
         
         @media (min-width: 1280px) {
             .masonry-grid {
-                column-count: 6;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
             }
         }
         
         .masonry-item {
-            break-inside: avoid;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0;
         }
         
-        /* Smaller masonry grid for selection */
+        /* Smaller grid for selection */
         #movies-selection-grid.masonry-grid {
-            column-count: 3;
-            column-gap: 0.5rem;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.5rem;
         }
         
         @media (min-width: 640px) {
             #movies-selection-grid.masonry-grid {
-                column-count: 4;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
             }
         }
         
         @media (min-width: 768px) {
             #movies-selection-grid.masonry-grid {
-                column-count: 5;
+                grid-template-columns: repeat(5, minmax(0, 1fr));
             }
         }
         
         @media (min-width: 1024px) {
             #movies-selection-grid.masonry-grid {
-                column-count: 6;
+                grid-template-columns: repeat(6, minmax(0, 1fr));
             }
         }
         
         @media (min-width: 1280px) {
             #movies-selection-grid.masonry-grid {
-                column-count: 7;
+                grid-template-columns: repeat(7, minmax(0, 1fr));
             }
         }
         
