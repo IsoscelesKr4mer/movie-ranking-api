@@ -1290,13 +1290,14 @@ function downloadShareImage() {
     }
     
     // Wait a bit for images to load, then generate
-    showMessage('Generating image... This may take a moment.', 'info');
+    showMessage('Converting images for download... This may take a moment.', 'info');
     
-    // Ensure all images are loaded before capturing
+    // Ensure all images are loaded and converted to data URLs before capturing
     const images = shareCardPreview.querySelectorAll('img');
     const imagePromises = Array.from(images).map(img => ensureImageLoaded(img));
     
     Promise.all(imagePromises).then(() => {
+        showMessage('Generating image...', 'info');
         // Scroll to top of share card for better image capture
         shareCardPreview.scrollIntoView({ behavior: 'auto', block: 'start' });
         
