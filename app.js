@@ -629,44 +629,23 @@ function displayComparison(comparison, status) {
         rightPoster.sizes = '(max-width: 640px) 300px, (max-width: 1024px) 500px, 780px';
     }
 
-    // Progress
-    if (status) {
-        const ranked = status.ranked_count || 0;
-        const total = status.total_movies || 0;
+    // Progress - calculate based on comparisons made
+    if (totalMoviesToRank > 0) {
+        // Estimate total comparisons needed for merge sort: approximately n*log2(n)
+        const estimatedTotalComparisons = totalMoviesToRank > 1 
+            ? Math.ceil(totalMoviesToRank * Math.log2(totalMoviesToRank))
+            : 0;
         
-        // Calculate progress percentage based on ranked vs total
-        // For merge sort, we estimate progress: when ranked_count approaches total, we're near completion
-        // But comparisons happen in stages, so we use a logarithmic scale for better UX
+        // Calculate progress percentage
         let progressPercentage = 0;
-        if (total > 0) {
-            // Use a logarithmic scale to better represent merge sort progress
-            // Early comparisons rank fewer movies, later ones rank more
-            const ratio = ranked / total;
-            if (ratio < 0.1) {
-                // Early stage: 0-10% of movies ranked = 0-30% progress
-                progressPercentage = (ratio / 0.1) * 30;
-            } else if (ratio < 0.5) {
-                // Mid stage: 10-50% of movies ranked = 30-70% progress
-                progressPercentage = 30 + ((ratio - 0.1) / 0.4) * 40;
-            } else {
-                // Late stage: 50-100% of movies ranked = 70-100% progress
-                progressPercentage = 70 + ((ratio - 0.5) / 0.5) * 30;
-            }
-            progressPercentage = Math.min(100, Math.max(0, progressPercentage));
-        }
-        
-        if (progressSpan) {
-            progressSpan.textContent = `${ranked}/${total} movies ranked`;
+        if (estimatedTotalComparisons > 0) {
+            progressPercentage = Math.min(100, Math.max(0, (comparisonsMade / estimatedTotalComparisons) * 100));
         }
         
         // Update progress bar
         const progressBar = document.getElementById('progress-bar');
-        const progressPercentageSpan = document.getElementById('progress-percentage');
         if (progressBar) {
             progressBar.style.width = `${progressPercentage}%`;
-        }
-        if (progressPercentageSpan) {
-            progressPercentageSpan.textContent = `${Math.round(progressPercentage)}%`;
         }
     }
 
@@ -725,6 +704,7 @@ async function makeChoice(choice) {
             }, 100);
         } else if (data.comparison) {
             // Continue with next comparison
+            comparisonsMade++; // Increment comparison counter
             currentComparison = data.comparison;
             displayComparison(data.comparison, data.status);
             // Don't show message for every choice to reduce clutter
