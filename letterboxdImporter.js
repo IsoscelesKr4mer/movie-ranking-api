@@ -85,6 +85,16 @@
     // Create session
     const sessionData = await apiCall('/api/session/create', 'POST');
     window.sessionId = sessionData.session_id;
+    // Sync to app.js local variable if it exists
+    if (typeof sessionId !== 'undefined') {
+      window.sessionId = sessionData.session_id;
+      // Try to update app.js sessionId if it's accessible
+      try {
+        if (window.appSessionId !== undefined) {
+          window.appSessionId = sessionData.session_id;
+        }
+      } catch (e) {}
+    }
     document.getElementById('session-id').textContent = window.sessionId;
     document.getElementById('session-info').classList.remove('hidden');
     document.getElementById('session-status').textContent = 'Session created';
@@ -128,6 +138,14 @@
       if (!b.release_date) return -1;
       return a.release_date.localeCompare(b.release_date);
     });
+    
+    // Sync sessionId and loadedMovies to app.js
+    if (window.sessionId && typeof window.syncSessionId === 'function') {
+      window.syncSessionId(window.sessionId);
+    }
+    if (window.loadedMovies && typeof window.syncLoadedMovies === 'function') {
+      window.syncLoadedMovies(window.loadedMovies);
+    }
     
     if (typeof displayMoviesForSelection === 'function') {
       displayMoviesForSelection(window.loadedMovies);
@@ -285,6 +303,11 @@
         if (!b.release_date) return -1;
         return a.release_date.localeCompare(b.release_date);
       });
+      
+      // Sync sessionId to app.js if window.sessionId was set
+      if (window.sessionId && typeof window.syncSessionId === 'function') {
+        window.syncSessionId(window.sessionId);
+      }
       
       // Hide setup section and show selection section (reuse variables from earlier in function)
       const finalConfigSection = document.getElementById('config-section');

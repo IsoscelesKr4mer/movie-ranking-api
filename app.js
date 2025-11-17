@@ -6,6 +6,15 @@ let sessionId = null;
 let currentComparison = null;
 let loadedMovies = [];
 let selectedMovieIds = new Set();
+
+// Sync functions for Letterboxd importer
+window.syncSessionId = function(id) {
+    sessionId = id;
+};
+
+window.syncLoadedMovies = function(movies) {
+    loadedMovies = movies;
+};
 let categories = {};
 let totalMoviesToRank = 0;
 let comparisonsMade = 0;
@@ -479,7 +488,15 @@ function toggleMovieSelection(movieId, element) {
 }
 
 function selectAllMovies() {
-    loadedMovies.forEach(movie => {
+    // Use window.loadedMovies if available (from Letterboxd import), otherwise use local loadedMovies
+    const moviesToSelect = window.loadedMovies && window.loadedMovies.length > 0 ? window.loadedMovies : loadedMovies;
+    
+    if (!moviesToSelect || moviesToSelect.length === 0) {
+        showMessage('No movies loaded to select', 'error');
+        return;
+    }
+    
+    moviesToSelect.forEach(movie => {
         selectedMovieIds.add(movie.id);
         const element = document.querySelector(`[data-movie-id="${movie.id}"]`);
         if (element) {
@@ -510,9 +527,16 @@ function updateSelectedCount() {
 }
 
 async function confirmSelection() {
-    if (!sessionId) {
+    // Check both local sessionId and window.sessionId (from Letterboxd import)
+    const currentSessionId = sessionId || window.sessionId;
+    if (!currentSessionId) {
         showMessage('Please create a session first', 'error');
         return;
+    }
+    
+    // Sync window.sessionId to local if it exists
+    if (window.sessionId && !sessionId) {
+        sessionId = window.sessionId;
     }
     
     if (selectedMovieIds.size < 2) {
@@ -554,9 +578,16 @@ async function confirmSelection() {
 }
 
 async function startRanking() {
-    if (!sessionId) {
+    // Check both local sessionId and window.sessionId (from Letterboxd import)
+    const currentSessionId = sessionId || window.sessionId;
+    if (!currentSessionId) {
         showMessage('Please create a session and select movies first', 'error');
         return;
+    }
+    
+    // Sync window.sessionId to local if it exists
+    if (window.sessionId && !sessionId) {
+        sessionId = window.sessionId;
     }
 
     try {
