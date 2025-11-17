@@ -100,13 +100,8 @@ createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
 importLetterboxdBtn.addEventListener('click', importLetterboxdList);
 
 // Custom List Event Listeners
-if (addItemBtn) addItemBtn.addEventListener('click', addCustomItem);
-if (browseImageBtn) browseImageBtn.addEventListener('click', () => newItemImageFileInput?.click());
-if (newItemImageFileInput) newItemImageFileInput.addEventListener('change', handleImageFileSelect);
-if (newItemImageUrlInput) newItemImageUrlInput.addEventListener('input', handleImageUrlInput);
-if (newItemNameInput) newItemNameInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') addCustomItem();
-});
+if (addItemRowBtn) addItemRowBtn.addEventListener('click', addBulkItemRow);
+if (addAllItemsBtn) addAllItemsBtn.addEventListener('click', addAllBulkItems);
 if (sampleDataBtn) sampleDataBtn.addEventListener('click', loadSampleData);
 if (clearCustomListBtn) clearCustomListBtn.addEventListener('click', clearCustomListInput);
 if (importJsonBtn) importJsonBtn.addEventListener('click', importFromJSON);
@@ -2346,7 +2341,66 @@ async function loadCategories(retryCount = 0) {
 
 // ==================== CUSTOM LIST FUNCTIONS ====================
 
-function handleImageFileSelect(e) {
+let bulkItemRowCounter = 0;
+
+function addBulkItemRow() {
+    if (!bulkItemsContainer) return;
+    
+    const rowId = `bulk-item-row-${bulkItemRowCounter++}`;
+    const row = document.createElement('div');
+    row.id = rowId;
+    row.className = 'glass rounded-lg p-3 flex items-start gap-3';
+    row.innerHTML = `
+        <div class="flex-1 space-y-2">
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1">Item Name</label>
+                <input type="text" class="bulk-item-name w-full px-3 py-1.5 text-sm bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Enter item name...">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1">Image URL</label>
+                <div class="flex gap-2">
+                    <input type="text" class="bulk-item-image-url flex-1 px-3 py-1.5 text-sm bg-gray-700/50 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste image URL...">
+                    <input type="file" class="bulk-item-image-file hidden" accept="image/*" data-row-id="${rowId}">
+                    <button type="button" class="bulk-browse-btn px-3 py-1.5 bg-gray-600/50 text-white rounded-lg hover:bg-gray-600/70 transition-all text-xs" data-row-id="${rowId}">Browse</button>
+                </div>
+            </div>
+        </div>
+        <button type="button" class="remove-bulk-row-btn px-2 py-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30 transition-all text-xs mt-6" data-row-id="${rowId}">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+        </button>
+    `;
+    
+    bulkItemsContainer.appendChild(row);
+    
+    // Add event listeners for this row
+    const browseBtn = row.querySelector('.bulk-browse-btn');
+    const fileInput = row.querySelector('.bulk-item-image-file');
+    const removeBtn = row.querySelector('.remove-bulk-row-btn');
+    
+    if (browseBtn && fileInput) {
+        browseBtn.addEventListener('click', () => fileInput.click());
+    }
+    
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => handleBulkImageFileSelect(e, rowId));
+    }
+    
+    if (removeBtn) {
+        removeBtn.addEventListener('click', () => {
+            row.remove();
+        });
+    }
+    
+    // Focus on the name input
+    const nameInput = row.querySelector('.bulk-item-name');
+    if (nameInput) {
+        setTimeout(() => nameInput.focus(), 100);
+    }
+}
+
+function handleBulkImageFileSelect(e, rowId) {
     const file = e.target.files[0];
     if (!file) return;
     
@@ -2358,72 +2412,62 @@ function handleImageFileSelect(e) {
     const reader = new FileReader();
     reader.onload = (event) => {
         const dataUrl = event.target.result;
-        if (newItemImageUrlInput) {
-            newItemImageUrlInput.value = dataUrl;
-        }
-        if (imagePreview) {
-            imagePreview.src = dataUrl;
-        }
-        if (imagePreviewContainer) {
-            imagePreviewContainer.classList.remove('hidden');
+        const row = document.getElementById(rowId);
+        if (row) {
+            const urlInput = row.querySelector('.bulk-item-image-url');
+            if (urlInput) {
+                urlInput.value = dataUrl;
+            }
         }
     };
     reader.readAsDataURL(file);
 }
 
-function handleImageUrlInput(e) {
-    const url = e.target.value.trim();
-    if (url && imagePreview) {
-        imagePreview.src = url;
-        if (imagePreviewContainer) {
-            imagePreviewContainer.classList.remove('hidden');
+function addAllBulkItems() {
+    if (!bulkItemsContainer) return;
+    
+    const rows = bulkItemsContainer.querySelectorAll('[id^="bulk-item-row-"]');
+    let addedCount = 0;
+    let skippedCount = 0;
+    
+    rows.forEach(row => {
+        const nameInput = row.querySelector('.bulk-item-name');
+        const imageUrlInput = row.querySelector('.bulk-item-image-url');
+        
+        if (!nameInput) return;
+        
+        const name = nameInput.value.trim();
+        if (!name) {
+            skippedCount++;
+            return;
         }
-        imagePreview.onerror = () => {
-            if (imagePreviewContainer) {
-                imagePreviewContainer.classList.add('hidden');
-            }
+        
+        const imageUrl = imageUrlInput?.value.trim() || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`;
+        
+        const item = {
+            id: -(customListItems.length + 1),
+            title: name,
+            poster_url: imageUrl,
+            release_date: null,
+            vote_average: 0,
+            overview: ""
         };
+        
+        customListItems.push(item);
+        addedCount++;
+    });
+    
+    if (addedCount > 0) {
+        // Clear all rows after adding
+        rows.forEach(row => row.remove());
+        bulkItemRowCounter = 0;
+        
+        renderCustomItemsList();
+        updateCustomItemCounter();
+        showMessage(`Added ${addedCount} item${addedCount > 1 ? 's' : ''} to list${skippedCount > 0 ? ` (${skippedCount} empty row${skippedCount > 1 ? 's' : ''} skipped)` : ''}`, 'success');
     } else {
-        if (imagePreviewContainer) {
-            imagePreviewContainer.classList.add('hidden');
-        }
+        showMessage('No items to add. Please fill in at least one item name.', 'error');
     }
-}
-
-function addCustomItem() {
-    if (!newItemNameInput) return;
-    
-    const name = newItemNameInput.value.trim();
-    if (!name) {
-        showMessage('Please enter an item name', 'error');
-        return;
-    }
-    
-    const imageUrl = newItemImageUrlInput?.value.trim() || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`;
-    
-    const item = {
-        id: -(customListItems.length + 1),
-        title: name,
-        poster_url: imageUrl,
-        release_date: null,
-        vote_average: 0,
-        overview: ""
-    };
-    
-    customListItems.push(item);
-    
-    // Clear form
-    if (newItemNameInput) newItemNameInput.value = '';
-    if (newItemImageUrlInput) newItemImageUrlInput.value = '';
-    if (newItemImageFileInput) newItemImageFileInput.value = '';
-    if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
-    
-    // Update display
-    renderCustomItemsList();
-    updateCustomItemCounter();
-    
-    // Focus back on name input
-    if (newItemNameInput) newItemNameInput.focus();
 }
 
 function removeCustomItem(index) {
@@ -2494,12 +2538,11 @@ function loadSampleData() {
 function clearCustomListInput() {
     customListItems = [];
     if (customListNameInput) customListNameInput.value = '';
-    if (newItemNameInput) newItemNameInput.value = '';
-    if (newItemImageUrlInput) newItemImageUrlInput.value = '';
-    if (newItemImageFileInput) newItemImageFileInput.value = '';
-    if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+    if (bulkItemsContainer) bulkItemsContainer.innerHTML = '';
+    bulkItemRowCounter = 0;
     renderCustomItemsList();
     updateCustomItemCounter();
+    showMessage('List cleared', 'info');
 }
 
 function createCustomList() {
@@ -2890,6 +2933,10 @@ function handleLoadTypeChange() {
         if (customListItems.length === 0) {
             renderCustomItemsList();
             updateCustomItemCounter();
+        }
+        // Add one initial row to bulk uploader
+        if (bulkItemsContainer && bulkItemsContainer.children.length === 0) {
+            addBulkItemRow();
         }
     }
 }
