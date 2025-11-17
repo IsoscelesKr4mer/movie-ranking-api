@@ -37,6 +37,17 @@ const resetBtn = document.getElementById('reset-btn');
 const resultsSection = document.getElementById('results-section');
 const resultsContainer = document.getElementById('results-container');
 const progressSpan = document.getElementById('comparison-progress');
+const backToHomeBtn = document.getElementById('back-to-home-btn');
+const backToHomeFromResultsBtn = document.getElementById('back-to-home-from-results-btn');
+const rankingIdDisplay = document.getElementById('ranking-id-display');
+const resultsRankingId = document.getElementById('results-ranking-id');
+const shareTwitterBtn = document.getElementById('share-twitter-btn');
+const shareFacebookBtn = document.getElementById('share-facebook-btn');
+const shareEmailBtn = document.getElementById('share-email-btn');
+const shareCopyLinkBtn = document.getElementById('share-copy-link-btn');
+const downloadImageBtn = document.getElementById('download-image-btn');
+const shareCardPreview = document.getElementById('share-card-preview');
+const shareCardTopMovies = document.getElementById('share-card-top-movies');
 
 // Event Listeners
 
@@ -50,6 +61,13 @@ startRankingBtn.addEventListener('click', startRanking);
 getStatusBtn.addEventListener('click', getStatus);
 getResultsBtn.addEventListener('click', getResults);
 resetBtn.addEventListener('click', reset);
+if (backToHomeBtn) backToHomeBtn.addEventListener('click', goBackToHome);
+if (backToHomeFromResultsBtn) backToHomeFromResultsBtn.addEventListener('click', goBackToHome);
+if (shareTwitterBtn) shareTwitterBtn.addEventListener('click', shareToTwitter);
+if (shareFacebookBtn) shareFacebookBtn.addEventListener('click', shareToFacebook);
+if (shareEmailBtn) shareEmailBtn.addEventListener('click', shareViaEmail);
+if (shareCopyLinkBtn) shareCopyLinkBtn.addEventListener('click', copyShareLink);
+if (downloadImageBtn) downloadImageBtn.addEventListener('click', downloadShareImage);
 
 // Choice buttons
 document.querySelectorAll('[data-choice]').forEach(btn => {
@@ -458,7 +476,16 @@ function displayComparison(comparison, status) {
         progressSpan.textContent = `Progress: ${progress} / ${total} movies ranked`;
     }
 
-    // Hide controls and show comparison
+    // Update ranking ID display
+    if (rankingIdDisplay && sessionId) {
+        rankingIdDisplay.textContent = sessionId;
+    }
+
+    // Hide config section and controls, show comparison
+    const configSection = document.getElementById('config-section');
+    if (configSection) {
+        configSection.classList.add('hidden');
+    }
     const rankingControls = document.getElementById('ranking-controls');
     if (rankingControls) {
         rankingControls.classList.add('hidden');
@@ -577,6 +604,33 @@ function displayResults(data) {
     resultsContainer.innerHTML = '';
 
     const rankedMovies = data.ranked_movies || [];
+    
+    // Store for sharing
+    window.lastRankedMovies = rankedMovies;
+    
+    // Update ranking ID in results
+    if (resultsRankingId && sessionId) {
+        resultsRankingId.textContent = sessionId;
+    }
+    
+    // Update share card with top 3 movies
+    if (shareCardTopMovies && rankedMovies.length > 0) {
+        shareCardTopMovies.innerHTML = '';
+        const top3 = rankedMovies.slice(0, 3);
+        top3.forEach((movie, idx) => {
+            const movieDiv = document.createElement('div');
+            movieDiv.className = 'text-center';
+            movieDiv.innerHTML = `
+                <div class="text-2xl font-bold text-white mb-1">#${idx + 1}</div>
+                <img src="${movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
+                     alt="${movie.title}"
+                     class="w-full rounded-lg mb-2 neumorphic"
+                     onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
+                <p class="text-xs text-gray-300 line-clamp-2">${movie.title}</p>
+            `;
+            shareCardTopMovies.appendChild(movieDiv);
+        });
+    }
 
     rankedMovies.forEach((movie, index) => {
         const item = document.createElement('div');
@@ -657,6 +711,32 @@ function displayResults(data) {
     }
 }
 
+function goBackToHome() {
+    // Hide all sections
+    selectionSection.classList.add('hidden');
+    rankingSection.classList.add('hidden');
+    comparisonContainer.classList.add('hidden');
+    resultsSection.classList.add('hidden');
+    
+    // Show config section
+    const configSection = document.getElementById('config-section');
+    if (configSection) {
+        configSection.classList.remove('hidden');
+    }
+    
+    // Re-enable body scroll
+    document.body.style.overflow = '';
+    
+    // Show ranking controls if they exist
+    const rankingControls = document.getElementById('ranking-controls');
+    if (rankingControls) {
+        rankingControls.classList.remove('hidden');
+    }
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
 function reset() {
     if (confirm('Are you sure you want to reset? This will clear your current session.')) {
         sessionId = null;
@@ -676,9 +756,91 @@ function reset() {
         resultsContainer.innerHTML = '';
         moviesSelectionGrid.innerHTML = '';
         updateSelectedCount();
+        
+        // Show config section
+        const configSection = document.getElementById('config-section');
+        if (configSection) {
+            configSection.classList.remove('hidden');
+        }
+        
         window.scrollTo({ top: 0, behavior: 'smooth' });
         showMessage('Session reset', 'info');
     }
+}
+
+function getShareUrl() {
+    const baseUrl = window.location.origin + window.location.pathname;
+    return `${baseUrl}?ranking=${sessionId}`;
+}
+
+function getShareText() {
+    const rankedMovies = window.lastRankedMovies || [];
+    if (rankedMovies.length > 0) {
+        const top3 = rankedMovies.slice(0, 3).map((m, i) => `${i + 1}. ${m.title}`).join('\n');
+        return `Check out my movie rankings!\n\nTop 3:\n${top3}\n\nView full ranking: ${getShareUrl()}`;
+    }
+    return `Check out my movie rankings! View them here: ${getShareUrl()}`;
+}
+
+function shareToTwitter() {
+    const text = encodeURIComponent(getShareText());
+    const url = `https://twitter.com/intent/tweet?text=${text}`;
+    window.open(url, '_blank', 'width=550,height=420');
+}
+
+function shareToFacebook() {
+    const url = encodeURIComponent(getShareUrl());
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=550,height=420');
+}
+
+function shareViaEmail() {
+    const subject = encodeURIComponent('My Movie Rankings');
+    const body = encodeURIComponent(getShareText());
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+function copyShareLink() {
+    const url = getShareUrl();
+    navigator.clipboard.writeText(url).then(() => {
+        showMessage('Link copied to clipboard!', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showMessage('Link copied to clipboard!', 'success');
+    });
+}
+
+function downloadShareImage() {
+    if (!shareCardPreview) return;
+    
+    // Check if html2canvas is available
+    if (typeof html2canvas === 'undefined') {
+        showMessage('Image generator not loaded. Please refresh the page.', 'error');
+        return;
+    }
+    
+    showMessage('Generating image...', 'info');
+    
+    html2canvas(shareCardPreview, {
+        backgroundColor: '#0a0a0f',
+        scale: 2,
+        useCORS: true,
+        logging: false
+    }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `movie-ranking-${sessionId || 'ranking'}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        showMessage('Image downloaded!', 'success');
+    }).catch(err => {
+        console.error('Error generating image:', err);
+        showMessage('Failed to generate image. Make sure all images are loaded.', 'error');
+    });
 }
 
 // Initialize
