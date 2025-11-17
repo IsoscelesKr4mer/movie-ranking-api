@@ -65,12 +65,18 @@ const hideShareBtn = document.getElementById('hide-share-btn');
 // Custom List DOM Elements
 const customGroup = document.getElementById('custom-group');
 const customListNameInput = document.getElementById('custom-list-name');
-const customCsvInput = document.getElementById('custom-csv-input');
+const newItemNameInput = document.getElementById('new-item-name');
+const newItemImageUrlInput = document.getElementById('new-item-image-url');
+const newItemImageFileInput = document.getElementById('new-item-image-file');
+const browseImageBtn = document.getElementById('browse-image-btn');
+const imagePreviewContainer = document.getElementById('image-preview-container');
+const imagePreview = document.getElementById('image-preview');
+const addItemBtn = document.getElementById('add-item-btn');
+const customItemsList = document.getElementById('custom-items-list');
 const sampleDataBtn = document.getElementById('sample-data-btn');
 const clearCustomListBtn = document.getElementById('clear-custom-list-btn');
 const importJsonBtn = document.getElementById('import-json-btn');
 const customItemCounter = document.getElementById('custom-item-counter');
-const customItemsPreview = document.getElementById('custom-items-preview');
 const loadCustomListBtn = document.getElementById('load-custom-list-btn');
 const saveCustomListBtn = document.getElementById('save-custom-list-btn');
 const toggleCustomListsBtn = document.getElementById('toggle-custom-lists-btn');
@@ -78,6 +84,9 @@ const manageCustomListsSection = document.getElementById('manage-custom-lists-se
 const savedCustomLists = document.getElementById('saved-custom-lists');
 const customListsSearch = document.getElementById('custom-lists-search');
 const exportAllListsBtn = document.getElementById('export-all-lists-btn');
+
+// Custom list items array
+let customListItems = [];
 
 // Past Rankings DOM Elements
 const pastRankingsSection = document.getElementById('past-rankings-section');
@@ -91,6 +100,13 @@ createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
 importLetterboxdBtn.addEventListener('click', importLetterboxdList);
 
 // Custom List Event Listeners
+if (addItemBtn) addItemBtn.addEventListener('click', addCustomItem);
+if (browseImageBtn) browseImageBtn.addEventListener('click', () => newItemImageFileInput?.click());
+if (newItemImageFileInput) newItemImageFileInput.addEventListener('change', handleImageFileSelect);
+if (newItemImageUrlInput) newItemImageUrlInput.addEventListener('input', handleImageUrlInput);
+if (newItemNameInput) newItemNameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') addCustomItem();
+});
 if (sampleDataBtn) sampleDataBtn.addEventListener('click', loadSampleData);
 if (clearCustomListBtn) clearCustomListBtn.addEventListener('click', clearCustomListInput);
 if (importJsonBtn) importJsonBtn.addEventListener('click', importFromJSON);
@@ -99,7 +115,6 @@ if (loadCustomListBtn) loadCustomListBtn.addEventListener('click', loadCustomLis
 if (toggleCustomListsBtn) toggleCustomListsBtn.addEventListener('click', toggleCustomLists);
 if (customListsSearch) customListsSearch.addEventListener('input', filterCustomLists);
 if (exportAllListsBtn) exportAllListsBtn.addEventListener('click', exportAllCustomLists);
-if (customCsvInput) customCsvInput.addEventListener('input', updateCustomListPreview);
 if (historySearch) historySearch.addEventListener('input', (e) => loadPastRankings(e.target.value));
 selectAllBtn.addEventListener('click', selectAllMovies);
 deselectAllBtn.addEventListener('click', deselectAllMovies);
@@ -2025,114 +2040,182 @@ async function loadCategories(retryCount = 0) {
 
 // ==================== CUSTOM LIST FUNCTIONS ====================
 
+function handleImageFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+        showMessage('Please select an image file', 'error');
+        return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const dataUrl = event.target.result;
+        if (newItemImageUrlInput) {
+            newItemImageUrlInput.value = dataUrl;
+        }
+        if (imagePreview) {
+            imagePreview.src = dataUrl;
+        }
+        if (imagePreviewContainer) {
+            imagePreviewContainer.classList.remove('hidden');
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+function handleImageUrlInput(e) {
+    const url = e.target.value.trim();
+    if (url && imagePreview) {
+        imagePreview.src = url;
+        if (imagePreviewContainer) {
+            imagePreviewContainer.classList.remove('hidden');
+        }
+        imagePreview.onerror = () => {
+            if (imagePreviewContainer) {
+                imagePreviewContainer.classList.add('hidden');
+            }
+        };
+    } else {
+        if (imagePreviewContainer) {
+            imagePreviewContainer.classList.add('hidden');
+        }
+    }
+}
+
+function addCustomItem() {
+    if (!newItemNameInput) return;
+    
+    const name = newItemNameInput.value.trim();
+    if (!name) {
+        showMessage('Please enter an item name', 'error');
+        return;
+    }
+    
+    const imageUrl = newItemImageUrlInput?.value.trim() || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`;
+    
+    const item = {
+        id: -(customListItems.length + 1),
+        title: name,
+        poster_url: imageUrl,
+        release_date: null,
+        vote_average: 0,
+        overview: ""
+    };
+    
+    customListItems.push(item);
+    
+    // Clear form
+    if (newItemNameInput) newItemNameInput.value = '';
+    if (newItemImageUrlInput) newItemImageUrlInput.value = '';
+    if (newItemImageFileInput) newItemImageFileInput.value = '';
+    if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+    
+    // Update display
+    renderCustomItemsList();
+    updateCustomItemCounter();
+    
+    // Focus back on name input
+    if (newItemNameInput) newItemNameInput.focus();
+}
+
+function removeCustomItem(index) {
+    customListItems.splice(index, 1);
+    // Reassign IDs
+    customListItems.forEach((item, idx) => {
+        item.id = -(idx + 1);
+    });
+    renderCustomItemsList();
+    updateCustomItemCounter();
+}
+
+function renderCustomItemsList() {
+    if (!customItemsList) return;
+    
+    if (customListItems.length === 0) {
+        customItemsList.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500 text-center py-4">No items added yet. Add items above.</p>';
+        return;
+    }
+    
+    customItemsList.innerHTML = customListItems.map((item, index) => `
+        <div class="glass rounded-lg p-3 flex items-center gap-3">
+            <img src="${item.poster_url}" alt="${item.title}" 
+                 class="w-16 h-24 object-cover rounded"
+                 onerror="this.src='https://via.placeholder.com/64x96?text=${encodeURIComponent(item.title)}'">
+            <div class="flex-1">
+                <h5 class="text-sm font-semibold text-white">${item.title}</h5>
+                <p class="text-xs text-gray-400 truncate">${item.poster_url.length > 50 ? item.poster_url.substring(0, 50) + '...' : item.poster_url}</p>
+            </div>
+            <button onclick="removeCustomItem(${index})" class="px-2 py-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30 transition-all text-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+    `).join('');
+}
+
+function updateCustomItemCounter() {
+    if (customItemCounter) {
+        customItemCounter.textContent = customListItems.length;
+    }
+}
+
 function loadSampleData() {
-    if (!customCsvInput) return;
-    const sampleData = `Wraith,https://via.placeholder.com/300x450?text=Wraith
-Pathfinder,https://via.placeholder.com/300x450?text=Pathfinder
-Bloodhound,https://via.placeholder.com/300x450?text=Bloodhound`;
-    customCsvInput.value = sampleData;
-    updateCustomListPreview();
+    const sampleItems = [
+        { name: 'Wraith', image: 'https://via.placeholder.com/300x450?text=Wraith' },
+        { name: 'Pathfinder', image: 'https://via.placeholder.com/300x450?text=Pathfinder' },
+        { name: 'Bloodhound', image: 'https://via.placeholder.com/300x450?text=Bloodhound' }
+    ];
+    
+    sampleItems.forEach(item => {
+        customListItems.push({
+            id: -(customListItems.length + 1),
+            title: item.name,
+            poster_url: item.image,
+            release_date: null,
+            vote_average: 0,
+            overview: ""
+        });
+    });
+    
+    renderCustomItemsList();
+    updateCustomItemCounter();
+    showMessage('Sample items added', 'success');
 }
 
 function clearCustomListInput() {
+    customListItems = [];
     if (customListNameInput) customListNameInput.value = '';
-    if (customCsvInput) customCsvInput.value = '';
-    if (customItemCounter) customItemCounter.textContent = '0 items added';
-    if (customItemsPreview) {
-        customItemsPreview.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>';
-    }
-}
-
-function updateCustomListPreview() {
-    if (!customCsvInput || !customItemsPreview || !customItemCounter) return;
-    
-    const csvInput = customCsvInput.value.trim();
-    if (!csvInput) {
-        customItemsPreview.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>';
-        customItemCounter.textContent = '0 items added';
-        return;
-    }
-    
-    const lines = csvInput.split('\n').filter(line => line.trim());
-    const items = [];
-    
-    lines.forEach((line, index) => {
-        const [name, imageUrl] = line.split(',').map(s => s.trim());
-        if (name) {
-            items.push({
-                id: -(index + 1),
-                title: name,
-                poster_url: imageUrl || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`,
-                release_date: null,
-                vote_average: 0,
-                overview: ""
-            });
-        }
-    });
-    
-    customItemCounter.textContent = `${items.length} items added`;
-    
-    if (items.length === 0) {
-        customItemsPreview.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>';
-        return;
-    }
-    
-    // Display preview grid
-    customItemsPreview.innerHTML = `
-        <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            ${items.slice(0, 8).map(item => `
-                <div class="text-center">
-                    <img src="${item.poster_url}" alt="${item.title}" 
-                         class="w-full h-auto rounded mb-1 object-cover"
-                         onerror="this.src='https://via.placeholder.com/100x150?text=${encodeURIComponent(item.title)}'">
-                    <p class="text-xs text-gray-300 line-clamp-1">${item.title}</p>
-                </div>
-            `).join('')}
-        </div>
-        ${items.length > 8 ? `<p class="text-xs text-gray-400 mt-2">+${items.length - 8} more items</p>` : ''}
-    `;
+    if (newItemNameInput) newItemNameInput.value = '';
+    if (newItemImageUrlInput) newItemImageUrlInput.value = '';
+    if (newItemImageFileInput) newItemImageFileInput.value = '';
+    if (imagePreviewContainer) imagePreviewContainer.classList.add('hidden');
+    renderCustomItemsList();
+    updateCustomItemCounter();
 }
 
 function createCustomList() {
-    if (!customListNameInput || !customCsvInput) return null;
+    if (!customListNameInput) return null;
     
     const listName = customListNameInput.value.trim();
-    const csvInput = customCsvInput.value.trim();
     
     if (!listName) {
         showMessage('Please enter a list name', 'error');
         return null;
     }
     
-    if (!csvInput) {
-        showMessage('Please add some items', 'error');
-        return null;
-    }
-    
-    const lines = csvInput.split('\n').filter(line => line.trim());
-    const items = [];
-    
-    lines.forEach((line, index) => {
-        const [name, imageUrl] = line.split(',').map(s => s.trim());
-        if (name) {
-            items.push({
-                id: -(index + 1),
-                title: name,
-                poster_url: imageUrl || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`,
-                release_date: null,
-                vote_average: 0,
-                overview: ""
-            });
-        }
-    });
-    
-    if (items.length < 2) {
+    if (customListItems.length < 2) {
         showMessage('Need at least 2 items to rank', 'error');
         return null;
     }
     
-    return items;
+    return customListItems.map(item => ({ ...item })); // Return a copy
 }
+
+// Expose removeCustomItem to global scope for onclick handlers
+window.removeCustomItem = removeCustomItem;
 
 function saveCustomList(listName, items) {
     try {
@@ -2298,13 +2381,15 @@ function editCustomList(listId) {
         
         // Populate form
         if (customListNameInput) customListNameInput.value = list.name;
-        if (customCsvInput) {
-            customCsvInput.value = list.items.map(item => {
-                const url = item.poster_url || '';
-                return `${item.title}${url ? ',' + url : ''}`;
-            }).join('\n');
-        }
-        updateCustomListPreview();
+        
+        // Load items into array
+        customListItems = list.items.map((item, index) => ({
+            ...item,
+            id: -(index + 1)
+        }));
+        
+        renderCustomItemsList();
+        updateCustomItemCounter();
         
         showMessage('List loaded for editing', 'info');
         
@@ -2427,6 +2512,11 @@ function handleLoadTypeChange() {
         yearGroup.classList.add('hidden');
         if (customGroup) customGroup.classList.remove('hidden');
         loadCustomListsFromStorage(); // Show saved lists
+        // Reset form if empty
+        if (customListItems.length === 0) {
+            renderCustomItemsList();
+            updateCustomItemCounter();
+        }
     }
 }
 

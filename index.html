@@ -542,24 +542,52 @@
                         </div>
                         <div id="custom-group" class="hidden col-span-2">
                             <label for="custom-list-name" class="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-1.5">List Name</label>
-                            <input type="text" id="custom-list-name" placeholder="e.g., Apex Legends Characters" class="w-full px-3 py-2 text-sm bg-gray-700/50 dark:bg-dark-surface border border-gray-600 dark:border-white/10 rounded-lg text-gray-200 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all mb-3">
+                            <input type="text" id="custom-list-name" placeholder="e.g., Apex Legends Characters" class="w-full px-3 py-2 text-sm bg-gray-700/50 dark:bg-dark-surface border border-gray-600 dark:border-white/10 rounded-lg text-gray-200 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all mb-4">
                             
-                            <label for="custom-csv-input" class="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-1.5">Items (CSV format)</label>
-                            <textarea id="custom-csv-input" rows="6" placeholder="ItemName,ImageURL (one per line, ImageURL optional)" class="w-full px-3 py-2 text-sm bg-gray-700/50 dark:bg-dark-surface border border-gray-600 dark:border-white/10 rounded-lg text-gray-200 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-xs"></textarea>
-                            <p class="text-xs text-gray-400 dark:text-gray-400 mt-1.5 mb-2">Format: ItemName,ImageURL (one per line, ImageURL optional)</p>
-                            
-                            <div class="flex gap-2 mb-3">
-                                <button id="sample-data-btn" class="btn-minimal text-xs px-3 py-1.5">Sample Data</button>
-                                <button id="clear-custom-list-btn" class="btn-minimal text-xs px-3 py-1.5">Clear List</button>
-                                <button id="import-json-btn" class="btn-minimal text-xs px-3 py-1.5">Import from JSON</button>
+                            <!-- Add Item Form -->
+                            <div class="glass rounded-lg p-4 mb-4">
+                                <h4 class="text-sm font-semibold text-white mb-3">Add Item</h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label for="new-item-name" class="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-1.5">Item Name</label>
+                                        <input type="text" id="new-item-name" placeholder="Enter item name..." class="w-full px-3 py-2 text-sm bg-gray-700/50 dark:bg-dark-surface border border-gray-600 dark:border-white/10 rounded-lg text-gray-200 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                                    </div>
+                                    <div>
+                                        <label for="new-item-image" class="block text-xs font-medium text-gray-400 dark:text-gray-400 mb-1.5">Image (URL or Upload)</label>
+                                        <div class="flex gap-2">
+                                            <input type="text" id="new-item-image-url" placeholder="Paste image URL..." class="flex-1 px-3 py-2 text-sm bg-gray-700/50 dark:bg-dark-surface border border-gray-600 dark:border-white/10 rounded-lg text-gray-200 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                                            <input type="file" id="new-item-image-file" accept="image/*" class="hidden">
+                                            <button type="button" id="browse-image-btn" class="px-3 py-2 bg-gray-600/50 text-white rounded-lg hover:bg-gray-600/70 transition-all text-xs font-medium">Browse</button>
+                                        </div>
+                                        <div id="image-preview-container" class="mt-2 hidden">
+                                            <img id="image-preview" src="" alt="Preview" class="max-w-full max-h-32 rounded-lg border border-gray-600">
+                                        </div>
+                                    </div>
+                                    <button id="add-item-btn" class="w-full px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium rounded-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-200 text-sm shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center justify-center gap-2">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                                        </svg>
+                                        Add Item
+                                    </button>
+                                </div>
                             </div>
                             
-                            <div id="custom-item-counter" class="text-xs text-gray-400 dark:text-gray-400 mb-2">0 items added</div>
-                            
-                            <div id="custom-items-preview" class="mb-3 p-3 bg-gray-800/50 dark:bg-gray-900/50 rounded-lg border border-gray-700/50 min-h-[100px]">
-                                <p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>
+                            <!-- Items List -->
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h4 class="text-sm font-semibold text-white">Items (<span id="custom-item-counter">0</span>)</h4>
+                                    <div class="flex gap-2">
+                                        <button id="sample-data-btn" class="btn-minimal text-xs px-3 py-1.5">Add Sample</button>
+                                        <button id="clear-custom-list-btn" class="btn-minimal text-xs px-3 py-1.5">Clear All</button>
+                                        <button id="import-json-btn" class="btn-minimal text-xs px-3 py-1.5">Import JSON</button>
+                                    </div>
+                                </div>
+                                <div id="custom-items-list" class="space-y-2 max-h-64 overflow-y-auto p-2 bg-gray-800/30 dark:bg-gray-900/30 rounded-lg border border-gray-700/50">
+                                    <p class="text-xs text-gray-500 dark:text-gray-500 text-center py-4">No items added yet. Add items above.</p>
+                                </div>
                             </div>
                             
+                            <!-- Action Buttons -->
                             <div class="flex gap-2">
                                 <button id="save-custom-list-btn" class="flex-1 px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-medium rounded-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 text-sm shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center justify-center gap-2" role="button" aria-label="Save custom list">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
