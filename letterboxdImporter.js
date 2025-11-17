@@ -113,12 +113,12 @@
     addMessage(`Imported ${setResp.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
 
     // Hide setup section and show selection section
-    const configSection = document.getElementById('config-section');
-    const selectionSection = document.getElementById('selection-section');
-    const sessionInfo = document.getElementById('session-info');
-    if (configSection) configSection.classList.add('hidden');
-    if (sessionInfo) sessionInfo.classList.add('hidden');
-    if (selectionSection) selectionSection.classList.remove('hidden');
+    const importConfigSection = document.getElementById('config-section');
+    const importSelectionSection = document.getElementById('selection-section');
+    const importSessionInfo = document.getElementById('session-info');
+    if (importConfigSection) importConfigSection.classList.add('hidden');
+    if (importSessionInfo) importSessionInfo.classList.add('hidden');
+    if (importSelectionSection) importSelectionSection.classList.remove('hidden');
     
     // Display for selection (reuse app.js helper)
     window.loadedMovies = (setResp.movies || []).sort((a, b) => {
@@ -199,15 +199,15 @@
         return a.release_date.localeCompare(b.release_date);
       });
 
+      // Display preview with indication of poster source
+      const grid = document.getElementById('movies-selection-grid');
+      const selectionSection = document.getElementById('selection-section');
+      
       // Hide setup section immediately when preview is shown
       const configSection = document.getElementById('config-section');
       const sessionInfo = document.getElementById('session-info');
       if (configSection) configSection.classList.add('hidden');
       if (sessionInfo) sessionInfo.classList.add('hidden');
-      
-      // Display preview with indication of poster source
-      const grid = document.getElementById('movies-selection-grid');
-      const selectionSection = document.getElementById('selection-section');
       if (grid && selectionSection) {
         selectionSection.classList.remove('hidden');
         grid.innerHTML = '';
@@ -286,13 +286,13 @@
         return a.release_date.localeCompare(b.release_date);
       });
       
-      // Hide setup section and show selection section
-      const configSection = document.getElementById('config-section');
-      const selectionSection = document.getElementById('selection-section');
-      const sessionInfo = document.getElementById('session-info');
-      if (configSection) configSection.classList.add('hidden');
-      if (sessionInfo) sessionInfo.classList.add('hidden');
-      if (selectionSection) selectionSection.classList.remove('hidden');
+      // Hide setup section and show selection section (reuse variables from earlier in function)
+      const finalConfigSection = document.getElementById('config-section');
+      const finalSelectionSection = document.getElementById('selection-section');
+      const finalSessionInfo = document.getElementById('session-info');
+      if (finalConfigSection) finalConfigSection.classList.add('hidden');
+      if (finalSessionInfo) finalSessionInfo.classList.add('hidden');
+      if (finalSelectionSection) finalSelectionSection.classList.remove('hidden');
       
       if (typeof displayMoviesForSelection === 'function') {
         displayMoviesForSelection(window.loadedMovies);
