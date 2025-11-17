@@ -39,12 +39,8 @@ const selectAllBtn = document.getElementById('select-all-btn');
 const deselectAllBtn = document.getElementById('deselect-all-btn');
 const confirmSelectionBtn = document.getElementById('confirm-selection-btn');
 const selectedCountSpan = document.getElementById('selected-count');
-const rankingSection = document.getElementById('ranking-section');
 const comparisonContainer = document.getElementById('comparison-container');
 const loading = document.getElementById('loading');
-const startRankingBtn = document.getElementById('start-ranking-btn');
-const getStatusBtn = document.getElementById('get-status-btn');
-const getResultsBtn = document.getElementById('get-results-btn');
 const resetBtn = document.getElementById('reset-btn');
 const resultsSection = document.getElementById('results-section');
 const resultsContainer = document.getElementById('results-container');
@@ -74,9 +70,6 @@ importLetterboxdBtn.addEventListener('click', importLetterboxdList);
 selectAllBtn.addEventListener('click', selectAllMovies);
 deselectAllBtn.addEventListener('click', deselectAllMovies);
 confirmSelectionBtn.addEventListener('click', confirmSelection);
-startRankingBtn.addEventListener('click', startRanking);
-getStatusBtn.addEventListener('click', getStatus);
-getResultsBtn.addEventListener('click', getResults);
 resetBtn.addEventListener('click', reset);
 if (backToHomeBtn) backToHomeBtn.addEventListener('click', goBackToHome);
 if (backToHomeFromResultsBtn) backToHomeFromResultsBtn.addEventListener('click', goBackToHome);
@@ -867,6 +860,7 @@ function displayResults(data) {
                          class="w-full h-full object-contain rounded max-h-full"
                          style="max-height: 100%;"
                          crossorigin="anonymous"
+                         loading="eager"
                          onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
                 </div>
                 <p class="text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto px-0.5">${movie.title}</p>
@@ -992,13 +986,8 @@ function reset() {
         selectedMovieIds.clear();
         sessionInfo.classList.add('hidden');
         selectionSection.classList.add('hidden');
-        rankingSection.classList.add('hidden');
         comparisonContainer.classList.add('hidden');
         document.body.style.overflow = '';
-        const rankingControls = document.getElementById('ranking-controls');
-        if (rankingControls) {
-            rankingControls.classList.remove('hidden');
-        }
         resultsSection.classList.add('hidden');
         resultsContainer.innerHTML = '';
         moviesSelectionGrid.innerHTML = '';
@@ -1064,13 +1053,42 @@ async function shareToTwitter() {
 }
 
 async function shareToFacebook() {
-    // Generate image first, then share
+    // Generate image first, then upload and share
     if (shareCardPreview && typeof html2canvas !== 'undefined') {
         showMessage('Generating image for sharing...', 'info');
         try {
             const imageDataUrl = await generateShareImage();
             if (imageDataUrl) {
-                // Trigger download so they can attach it
+                // Upload image to imgur for sharing
+                try {
+                    const blob = await (await fetch(imageDataUrl)).blob();
+                    const formData = new FormData();
+                    formData.append('image', blob);
+                    
+                    const uploadResponse = await fetch('https://api.imgur.com/3/image', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Client-ID 546c25a59c58ad7' // Public imgur client ID
+                        },
+                        body: formData
+                    });
+                    
+                    if (uploadResponse.ok) {
+                        const uploadData = await uploadResponse.json();
+                        if (uploadData.success && uploadData.data && uploadData.data.link) {
+                            const imageUrl = uploadData.data.link;
+                            // Facebook doesn't support direct image sharing via URL, but we can share the link
+                            const url = encodeURIComponent(getShareUrl());
+                            window.open(`https://www.facebook.com/sharer/sharer.php?u=${url}`, '_blank', 'width=550,height=420');
+                            showMessage('Image uploaded! Share the link on Facebook.', 'success');
+                            return;
+                        }
+                    }
+                } catch (uploadError) {
+                    console.warn('Failed to upload to imgur:', uploadError);
+                }
+                
+                // Fallback: download image
                 setTimeout(() => downloadShareImage(), 500);
             }
         } catch (e) {
@@ -1103,10 +1121,70 @@ function copyShareLink() {
     });
 }
 
-// Load image and ensure it's ready for html2canvas
+// Convert image to data URL using fetch to avoid CORS issues
+async function imageToDataUrl(img) {
+    try {
+        // Try to fetch the image
+        const response = await fetch(img.src, { mode: 'cors' });
+        if (response.ok) {
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => {
+                    // Fallback: try canvas approach
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = img.naturalWidth || img.width || 300;
+                        canvas.height = img.naturalHeight || img.height || 450;
+                        ctx.drawImage(img, 0, 0);
+                        resolve(canvas.toDataURL('image/png'));
+                    } catch (e) {
+                        resolve(img.src); // Return original if all fails
+                    }
+                };
+                reader.readAsDataURL(blob);
+            });
+        }
+    } catch (e) {
+        // If fetch fails (CORS), try using a proxy
+        try {
+            // Use a CORS proxy (you can replace this with your own proxy endpoint)
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(img.src)}`;
+            const response = await fetch(proxyUrl);
+            if (response.ok) {
+                const data = await response.json();
+                const imgResponse = await fetch(data.contents);
+                const blob = await imgResponse.blob();
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = () => resolve(img.src);
+                    reader.readAsDataURL(blob);
+                });
+            }
+        } catch (proxyError) {
+            console.warn('Failed to fetch image via proxy:', proxyError);
+        }
+    }
+    return img.src; // Fallback to original
+}
+
+// Load image and convert to data URL for html2canvas
 async function ensureImageLoaded(img) {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
         if (img.complete && img.naturalHeight !== 0) {
+            // Image is loaded, convert to data URL
+            try {
+                const dataUrl = await imageToDataUrl(img);
+                if (dataUrl && dataUrl !== img.src && dataUrl.startsWith('data:')) {
+                    img.setAttribute('data-original-src', img.src);
+                    img.src = dataUrl;
+                }
+            } catch (e) {
+                console.warn('Failed to convert image:', e);
+            }
             resolve();
             return;
         }
@@ -1115,8 +1193,17 @@ async function ensureImageLoaded(img) {
             resolve(); // Resolve anyway after timeout
         }, 5000);
         
-        img.onload = () => {
+        img.onload = async () => {
             clearTimeout(timeout);
+            try {
+                const dataUrl = await imageToDataUrl(img);
+                if (dataUrl && dataUrl !== img.src && dataUrl.startsWith('data:')) {
+                    img.setAttribute('data-original-src', img.src);
+                    img.src = dataUrl;
+                }
+            } catch (e) {
+                console.warn('Failed to convert image:', e);
+            }
             resolve();
         };
         
@@ -1127,7 +1214,7 @@ async function ensureImageLoaded(img) {
         
         // Force reload if needed
         if (!img.src || img.src === '') {
-            const originalSrc = img.getAttribute('data-src') || img.getAttribute('src');
+            const originalSrc = img.getAttribute('data-src') || img.getAttribute('data-original-src') || img.getAttribute('src');
             if (originalSrc) {
                 img.src = originalSrc;
             }
@@ -1159,26 +1246,13 @@ function downloadShareImage() {
             html2canvas(shareCardPreview, {
                 backgroundColor: null,
                 scale: 2,
-                useCORS: false,
-                allowTaint: true,
+                useCORS: true,
+                allowTaint: false,
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
                 windowWidth: shareCardPreview.scrollWidth,
-                windowHeight: shareCardPreview.scrollHeight,
-                onclone: (clonedDoc) => {
-                    // Ensure all images in cloned doc are loaded
-                    const clonedImages = clonedDoc.querySelectorAll('img');
-                    clonedImages.forEach(clonedImg => {
-                        if (clonedImg.complete && clonedImg.naturalHeight !== 0) {
-                            return;
-                        }
-                        // Force reload
-                        const originalSrc = clonedImg.src;
-                        clonedImg.src = '';
-                        clonedImg.src = originalSrc;
-                    });
-                }
+                windowHeight: shareCardPreview.scrollHeight
             }).then(canvas => {
                 // Convert canvas to blob and download
                 canvas.toBlob((blob) => {
@@ -1211,8 +1285,8 @@ async function generateShareImage() {
             html2canvas(shareCardPreview, {
                 backgroundColor: null,
                 scale: 2,
-                useCORS: false,
-                allowTaint: true,
+                useCORS: true,
+                allowTaint: false,
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
