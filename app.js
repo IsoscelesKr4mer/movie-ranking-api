@@ -950,7 +950,6 @@ function displayResults(data) {
 function goBackToHome() {
     // Hide all sections
     selectionSection.classList.add('hidden');
-    rankingSection.classList.add('hidden');
     comparisonContainer.classList.add('hidden');
     resultsSection.classList.add('hidden');
     
@@ -962,12 +961,6 @@ function goBackToHome() {
     
     // Re-enable body scroll
     document.body.style.overflow = '';
-    
-    // Show ranking controls if they exist
-    const rankingControls = document.getElementById('ranking-controls');
-    if (rankingControls) {
-        rankingControls.classList.remove('hidden');
-    }
     
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
