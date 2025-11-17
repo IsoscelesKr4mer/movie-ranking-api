@@ -631,32 +631,32 @@ function displayComparison(comparison, status) {
 
     // Progress
     if (status) {
-        const progress = status.ranked_count || 0;
+        const ranked = status.ranked_count || 0;
         const total = status.total_movies || 0;
-        const remaining = status.remaining_comparisons || 0;
         
-        // Calculate progress percentage
-        // For merge sort, we estimate total comparisons needed
-        // Rough estimate: n*log2(n) comparisons for n movies
+        // Calculate progress percentage based on ranked vs total
+        // For merge sort, we estimate progress: when ranked_count approaches total, we're near completion
+        // But comparisons happen in stages, so we use a logarithmic scale for better UX
         let progressPercentage = 0;
-        if (total > 0 && remaining !== undefined) {
-            // Estimate total comparisons needed (roughly n*log2(n))
-            const estimatedTotalComparisons = total > 1 ? Math.ceil(total * Math.log2(total)) : 0;
-            const completedComparisons = estimatedTotalComparisons - remaining;
-            progressPercentage = estimatedTotalComparisons > 0 
-                ? Math.min(100, Math.max(0, (completedComparisons / estimatedTotalComparisons) * 100))
-                : 0;
-        } else if (total > 0) {
-            // Fallback: use ranked count vs total
-            progressPercentage = (progress / total) * 100;
+        if (total > 0) {
+            // Use a logarithmic scale to better represent merge sort progress
+            // Early comparisons rank fewer movies, later ones rank more
+            const ratio = ranked / total;
+            if (ratio < 0.1) {
+                // Early stage: 0-10% of movies ranked = 0-30% progress
+                progressPercentage = (ratio / 0.1) * 30;
+            } else if (ratio < 0.5) {
+                // Mid stage: 10-50% of movies ranked = 30-70% progress
+                progressPercentage = 30 + ((ratio - 0.1) / 0.4) * 40;
+            } else {
+                // Late stage: 50-100% of movies ranked = 70-100% progress
+                progressPercentage = 70 + ((ratio - 0.5) / 0.5) * 30;
+            }
+            progressPercentage = Math.min(100, Math.max(0, progressPercentage));
         }
         
         if (progressSpan) {
-            if (remaining > 0) {
-                progressSpan.textContent = `${progress}/${total} ranked • ${remaining} comparisons left`;
-            } else {
-                progressSpan.textContent = `${progress}/${total} ranked`;
-            }
+            progressSpan.textContent = `${ranked}/${total} movies ranked`;
         }
         
         // Update progress bar
@@ -823,7 +823,7 @@ function displayResults(data) {
             const posterUrl = movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster';
             movieDiv.innerHTML = `
                 <div class="relative">
-                    <div class="absolute -top-1 -left-1 z-10 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm shadow-lg">
+                    <div class="absolute -top-1 -left-1 z-10 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm shadow-lg">
                         ${rank}
                     </div>
                     <img src="${posterUrl}" 
