@@ -266,13 +266,12 @@ async function apiCall(endpoint, method = 'GET', body = null, timeout = 90000) {
 
         return data;
     } catch (error) {
-        console.error('API Error:', error);
-        
-        // Don't show error message for timeout on category loading (it will retry)
+        // Don't log expected timeout errors for category loading (they're handled by retry logic)
         if (endpoint === '/api/categories' && error.message.includes('timeout')) {
-            throw error; // Let loadCategories handle the retry
+            throw error; // Let loadCategories handle the retry silently
         }
         
+        console.error('API Error:', error);
         showMessage(`Error: ${error.message}`, 'error');
         throw error;
     }
@@ -1114,27 +1113,26 @@ async function loadCategories(retryCount = 0) {
             showMessage('Categories loaded successfully!', 'success');
         }
     } catch (error) {
-        console.error('Failed to load categories:', error);
-        console.error('Error details:', {
-            message: error.message,
-            stack: error.stack,
-            retryCount: retryCount
-        });
-        
         if (retryCount < maxRetries) {
             // Retry with exponential backoff (10s, 20s, 30s)
             const delay = (retryCount + 1) * 10000;
             movieCategorySelect.innerHTML = `<option value="">Retrying in ${delay / 1000} seconds... (Attempt ${retryCount + 1}/${maxRetries})</option>`;
-            console.log(`Scheduling retry in ${delay}ms`);
+            
+            // Only log retry attempts, not the error itself (expected for cold starts)
+            if (error.message.includes('timeout')) {
+                console.log(`Render cold start detected. Retrying in ${delay / 1000}s...`);
+            } else {
+                console.warn('Category load error (will retry):', error.message);
+            }
             
             setTimeout(() => {
-                console.log('Executing retry...');
                 loadCategories(retryCount + 1);
             }, delay);
         } else {
-            movieCategorySelect.innerHTML = '<option value="">Error loading categories - Check console for details</option>';
-            showMessage(`Failed to load categories after ${maxRetries} attempts. Error: ${error.message}. Check browser console (F12) for details.`, 'error');
-            console.error('Final failure - no more retries');
+            // Only log final failures
+            console.error('Failed to load categories after all retries:', error);
+            movieCategorySelect.innerHTML = '<option value="">Error loading categories</option>';
+            showMessage(`Failed to load categories after ${maxRetries} attempts. The server may be down.`, 'error');
         }
     }
 }
