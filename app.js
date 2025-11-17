@@ -7,6 +7,8 @@ let currentComparison = null;
 let loadedMovies = [];
 let selectedMovieIds = new Set();
 let categories = {};
+let totalMoviesToRank = 0;
+let comparisonsMade = 0;
 
 // DOM Elements
 const loadTypeSelect = document.getElementById('load-type');
@@ -549,6 +551,8 @@ async function startRanking() {
 
     try {
         showLoading(true);
+        // Reset comparison counter when starting
+        comparisonsMade = 0;
         const data = await apiCall(`/api/session/${sessionId}/ranking/start`, 'POST');
 
         if (data.comparison) {
