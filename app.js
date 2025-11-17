@@ -376,11 +376,11 @@ function displayMoviesForSelection(movies) {
                 </div>
                 <img src="${posterUrl}" 
                      alt="${movie.title}"
-                     class="w-full h-auto neumorphic"
+                     class="w-full h-auto max-h-[200px] object-cover neumorphic"
                      onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
-                <div class="p-3">
-                    <h5 class="text-sm font-semibold text-white mb-1 line-clamp-2">${movie.title}</h5>
-                    <p class="text-xs text-gray-400">${year}</p>
+                <div class="p-2">
+                    <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${movie.title}</h5>
+                    <p class="text-xs text-gray-600 dark:text-gray-400">${year}</p>
                 </div>
             </div>
         `;
@@ -745,7 +745,7 @@ function displayResults(data) {
                          class="w-full rounded-lg mb-1 sm:mb-2 neumorphic"
                          onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
                 </div>
-                <p class="text-xs sm:text-sm text-gray-300 line-clamp-2 font-medium">${movie.title}</p>
+                <p class="text-xs sm:text-sm text-gray-300 dark:text-gray-300 line-clamp-2 font-medium min-h-[2.5rem]">${movie.title}</p>
             `;
             shareCardAllMovies.appendChild(movieDiv);
         });
@@ -769,15 +769,15 @@ function displayResults(data) {
                     <img src="${posterUrl}" 
                          ${posterUrl.includes('w500') ? `srcset="${posterUrl.replace('w500', 'w300')} 300w, ${posterUrl.replace('w500', 'w500')} 500w, ${posterUrl.replace('w500', 'w780')} 780w" sizes="(max-width: 640px) 150px, (max-width: 1024px) 180px, 200px"` : ''}
                          alt="${movie.title} poster"
-                         class="w-full h-auto"
+                         class="w-full h-auto max-h-[280px] object-cover"
                          loading="lazy"
                          decoding="async">
                 </div>
-                <div class="p-4">
-                    <h4 class="text-base font-semibold text-black dark:text-white mb-2 line-clamp-2">${movie.title}</h4>
-                    <div class="flex items-center justify-between text-sm">
+                <div class="p-3">
+                    <h4 class="text-sm font-semibold text-black dark:text-white mb-2 line-clamp-2 min-h-[2.5rem]">${movie.title}</h4>
+                    <div class="flex items-center justify-between text-xs">
                         <span class="text-yellow-400">⭐ ${rating}</span>
-                        <span class="text-gray-400">${year}</span>
+                        <span class="text-gray-600 dark:text-gray-400">${year}</span>
                     </div>
                 </div>
             </div>
@@ -817,9 +817,9 @@ function displayResults(data) {
                         <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover opacity-60">
                             <img src="${movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster'}" 
                                  alt="${movie.title}"
-                                 class="w-full h-auto neumorphic">
-                            <div class="p-3">
-                                <h4 class="text-sm font-semibold text-white line-clamp-2">${movie.title}</h4>
+                                 class="w-full h-auto max-h-[200px] object-cover neumorphic">
+                            <div class="p-2">
+                                <h4 class="text-xs font-semibold text-black dark:text-white line-clamp-2 min-h-[2.5rem]">${movie.title}</h4>
                             </div>
                         </div>
                     `;

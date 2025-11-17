@@ -56,11 +56,11 @@
           </div>
           <img loading="lazy" src="${posterUrl}" 
                alt="${m.title}"
-               class="w-full h-auto neumorphic"
+               class="w-full h-auto max-h-[200px] object-cover neumorphic"
                onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
-          <div class="p-3">
-            <h5 class="text-sm font-semibold text-white mb-1 line-clamp-2">${m.title}</h5>
-            <p class="text-xs text-gray-400">${yearText}</p>
+          <div class="p-2">
+            <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${m.title}</h5>
+            <p class="text-xs text-gray-600 dark:text-gray-400">${yearText}</p>
           </div>
         </div>
       `;
@@ -195,11 +195,11 @@
               </div>
               <img loading="lazy" src="${posterUrl}" 
                    alt="${m.title}" title="${posterTitle}"
-                   class="w-full h-auto neumorphic"
+                   class="w-full h-auto max-h-[200px] object-cover neumorphic"
                    onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
-              <div class="p-3">
-                <h5 class="text-sm font-semibold text-white mb-1 line-clamp-2">${m.title}</h5>
-                <p class="text-xs text-gray-400">${yearText}</p>
+              <div class="p-2">
+                <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${m.title}</h5>
+                <p class="text-xs text-gray-600 dark:text-gray-400">${yearText}</p>
               </div>
             </div>
           `;
