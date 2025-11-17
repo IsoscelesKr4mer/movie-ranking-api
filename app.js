@@ -328,6 +328,7 @@ async function createSessionAndLoadMovies() {
         
         // Hide setup section and show selection section
         configSection.classList.add('hidden');
+        if (sessionInfo) sessionInfo.classList.add('hidden');
         selectionSection.classList.remove('hidden');
         
         // Ensure movies grid is visible
