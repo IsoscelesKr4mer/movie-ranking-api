@@ -799,9 +799,7 @@ function displayResults(data) {
         shareCardAllMovies.innerHTML = '';
         
         // Update share card ranking ID
-        if (shareCardRankingId && sessionId) {
-            shareCardRankingId.textContent = sessionId;
-        }
+        // ID removed from share card display
         
         rankedMovies.forEach((movie, idx) => {
             const rank = idx + 1;
