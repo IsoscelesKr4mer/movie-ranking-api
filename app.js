@@ -70,7 +70,7 @@ importLetterboxdBtn.addEventListener('click', importLetterboxdList);
 selectAllBtn.addEventListener('click', selectAllMovies);
 deselectAllBtn.addEventListener('click', deselectAllMovies);
 confirmSelectionBtn.addEventListener('click', confirmSelection);
-resetBtn.addEventListener('click', reset);
+if (resetBtn) resetBtn.addEventListener('click', reset);
 if (backToHomeBtn) backToHomeBtn.addEventListener('click', goBackToHome);
 if (backToHomeFromResultsBtn) backToHomeFromResultsBtn.addEventListener('click', goBackToHome);
 if (backFromSelectionBtn) backFromSelectionBtn.addEventListener('click', goBackToHome);
@@ -132,12 +132,13 @@ function showMessage(text, type = 'info') {
     }, 5000);
 }
 
-let lottieAnimation = null;
+var lottieAnimation = null;
 
 function showLoading(show = true) {
     if (show) {
+        if (!loading) return;
         loading.classList.remove('hidden');
-        comparisonContainer.classList.add('hidden');
+        if (comparisonContainer) comparisonContainer.classList.add('hidden');
         
         // Initialize Lottie animation if not already done
         const spinnerContainer = document.getElementById('lottie-spinner');
@@ -223,9 +224,13 @@ function showLoading(show = true) {
             spinnerContainer.innerHTML = '<div class="inline-block w-12 h-12 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
         }
     } else {
-        loading.classList.add('hidden');
-        if (lottieAnimation) {
-            lottieAnimation.destroy();
+        if (loading) loading.classList.add('hidden');
+        if (typeof lottieAnimation !== 'undefined' && lottieAnimation) {
+            try {
+                lottieAnimation.destroy();
+            } catch (e) {
+                // Ignore destroy errors
+            }
             lottieAnimation = null;
         }
     }
