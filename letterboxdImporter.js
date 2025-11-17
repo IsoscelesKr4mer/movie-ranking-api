@@ -112,14 +112,24 @@
     );
     addMessage(`Imported ${setResp.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
 
+    // Hide setup section and show selection section
+    const configSection = document.getElementById('config-section');
+    const selectionSection = document.getElementById('selection-section');
+    const sessionInfo = document.getElementById('session-info');
+    if (configSection) configSection.classList.add('hidden');
+    if (sessionInfo) sessionInfo.classList.add('hidden');
+    if (selectionSection) selectionSection.classList.remove('hidden');
+    
     // Display for selection (reuse app.js helper)
-    window.loadedMovies = setResp.movies || [];
-    document.getElementById('selection-section').classList.remove('hidden');
+    window.loadedMovies = (setResp.movies || []).sort((a, b) => {
+      // Sort by release_date (earliest first, null dates go to end)
+      if (!a.release_date && !b.release_date) return 0;
+      if (!a.release_date) return 1;
+      if (!b.release_date) return -1;
+      return a.release_date.localeCompare(b.release_date);
+    });
+    
     if (typeof displayMoviesForSelection === 'function') {
-      const configSection = document.getElementById('config-section');
-      const selectionSection = document.getElementById('selection-section');
-      if (configSection) configSection.classList.add('hidden');
-      if (selectionSection) selectionSection.classList.remove('hidden');
       displayMoviesForSelection(window.loadedMovies);
     } else {
       renderPreview(movies); // Pass the original movies array to renderPreview
@@ -189,10 +199,17 @@
         return a.release_date.localeCompare(b.release_date);
       });
 
+      // Hide setup section immediately when preview is shown
+      const configSection = document.getElementById('config-section');
+      const sessionInfo = document.getElementById('session-info');
+      if (configSection) configSection.classList.add('hidden');
+      if (sessionInfo) sessionInfo.classList.add('hidden');
+      
       // Display preview with indication of poster source
       const grid = document.getElementById('movies-selection-grid');
       const selectionSection = document.getElementById('selection-section');
       if (grid && selectionSection) {
+        selectionSection.classList.remove('hidden');
         grid.innerHTML = '';
         enriched.forEach((m, idx) => {
           const item = document.createElement('div');
@@ -268,7 +285,15 @@
         if (!b.release_date) return -1;
         return a.release_date.localeCompare(b.release_date);
       });
-      document.getElementById('selection-section').classList.remove('hidden');
+      
+      // Hide setup section and show selection section
+      const configSection = document.getElementById('config-section');
+      const selectionSection = document.getElementById('selection-section');
+      const sessionInfo = document.getElementById('session-info');
+      if (configSection) configSection.classList.add('hidden');
+      if (sessionInfo) sessionInfo.classList.add('hidden');
+      if (selectionSection) selectionSection.classList.remove('hidden');
+      
       if (typeof displayMoviesForSelection === 'function') {
         displayMoviesForSelection(window.loadedMovies);
       } else {
