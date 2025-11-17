@@ -1284,13 +1284,17 @@ function downloadShareImage() {
             html2canvas(shareCardPreview, {
                 backgroundColor: null,
                 scale: 2,
-                useCORS: true,
-                allowTaint: false,
+                useCORS: false,
+                allowTaint: true,
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
                 windowWidth: shareCardPreview.scrollWidth,
-                windowHeight: shareCardPreview.scrollHeight
+                windowHeight: shareCardPreview.scrollHeight,
+                ignoreElements: (element) => {
+                    // Ignore elements that are hidden or have no content
+                    return element.style.display === 'none' || element.offsetWidth === 0 || element.offsetHeight === 0;
+                }
             }).then(canvas => {
                 // Convert canvas to blob and download
                 canvas.toBlob((blob) => {
