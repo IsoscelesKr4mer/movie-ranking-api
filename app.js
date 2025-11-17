@@ -49,6 +49,9 @@ const downloadImageBtn = document.getElementById('download-image-btn');
 const shareCardPreview = document.getElementById('share-card-preview');
 const shareCardAllMovies = document.getElementById('share-card-all-movies');
 const shareCardRankingId = document.getElementById('share-card-ranking-id');
+const shareSection = document.getElementById('share-section');
+const showShareBtn = document.getElementById('show-share-btn');
+const hideShareBtn = document.getElementById('hide-share-btn');
 
 // Event Listeners
 
@@ -69,6 +72,17 @@ if (shareFacebookBtn) shareFacebookBtn.addEventListener('click', shareToFacebook
 if (shareEmailBtn) shareEmailBtn.addEventListener('click', shareViaEmail);
 if (shareCopyLinkBtn) shareCopyLinkBtn.addEventListener('click', copyShareLink);
 if (downloadImageBtn) downloadImageBtn.addEventListener('click', downloadShareImage);
+if (showShareBtn) showShareBtn.addEventListener('click', () => {
+    if (shareSection) {
+        shareSection.classList.remove('hidden');
+        shareSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+});
+if (hideShareBtn) hideShareBtn.addEventListener('click', () => {
+    if (shareSection) {
+        shareSection.classList.add('hidden');
+    }
+});
 
 // Choice buttons
 document.querySelectorAll('[data-choice]').forEach(btn => {
@@ -363,7 +377,7 @@ function displayMoviesForSelection(movies) {
         const posterUrl = movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
         
         item.innerHTML = `
-            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover cursor-pointer relative group">
+            <div class="modern-card rounded-2xl overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer relative group shadow-md hover:shadow-xl">
                 <div class="absolute top-2 right-2 z-10 w-8 h-8 bg-green-500/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
@@ -376,7 +390,7 @@ function displayMoviesForSelection(movies) {
                 </div>
                 <img src="${posterUrl}" 
                      alt="${movie.title}"
-                     class="w-full h-auto max-h-[200px] object-cover neumorphic"
+                     class="w-full h-auto max-h-[200px] object-contain neumorphic"
                      onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
                 <div class="p-2">
                     <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${movie.title}</h5>
@@ -742,10 +756,10 @@ function displayResults(data) {
                     </div>
                     <img src="${posterUrl}" 
                          alt="${movie.title}"
-                         class="w-full rounded-lg mb-1 sm:mb-2 neumorphic"
+                         class="w-full rounded-lg mb-1 sm:mb-2 object-contain"
                          onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
                 </div>
-                <p class="text-xs sm:text-sm text-gray-300 dark:text-gray-300 line-clamp-2 font-medium min-h-[2.5rem]">${movie.title}</p>
+                <p class="text-xs sm:text-sm text-gray-700 dark:text-gray-300 line-clamp-2 font-medium min-h-[2.5rem]">${movie.title}</p>
             `;
             shareCardAllMovies.appendChild(movieDiv);
         });
@@ -759,7 +773,7 @@ function displayResults(data) {
         const rating = movie.vote_average || 'N/A';
         
         item.innerHTML = `
-            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover relative" role="article" aria-label="Rank ${rank}: ${movie.title}">
+            <div class="modern-card rounded-2xl overflow-hidden transition-all duration-300 hover:scale-105 relative shadow-md hover:shadow-xl" role="article" aria-label="Rank ${rank}: ${movie.title}">
                 <div class="absolute top-3 left-3 z-10 rank-badge">
                     <div class="bg-white/10 backdrop-blur-sm text-white font-bold rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-sm sm:text-lg shadow-lg border border-white/20">
                         #${rank}
@@ -769,7 +783,7 @@ function displayResults(data) {
                     <img src="${posterUrl}" 
                          ${posterUrl.includes('w500') ? `srcset="${posterUrl.replace('w500', 'w300')} 300w, ${posterUrl.replace('w500', 'w500')} 500w, ${posterUrl.replace('w500', 'w780')} 780w" sizes="(max-width: 640px) 150px, (max-width: 1024px) 180px, 200px"` : ''}
                          alt="${movie.title} poster"
-                         class="w-full h-auto max-h-[280px] object-cover"
+                         class="w-full h-auto max-h-[280px] object-contain"
                          loading="lazy"
                          decoding="async">
                 </div>
@@ -814,10 +828,10 @@ function displayResults(data) {
                     const item = document.createElement('div');
                     item.className = 'masonry-item';
                     item.innerHTML = `
-                        <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover opacity-60">
+                        <div class="modern-card rounded-2xl overflow-hidden transition-all duration-300 opacity-60 hover:opacity-80">
                             <img src="${movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster'}" 
                                  alt="${movie.title}"
-                                 class="w-full h-auto max-h-[200px] object-cover neumorphic">
+                                 class="w-full h-auto max-h-[200px] object-contain neumorphic">
                             <div class="p-2">
                                 <h4 class="text-xs font-semibold text-black dark:text-white line-clamp-2 min-h-[2.5rem]">${movie.title}</h4>
                             </div>

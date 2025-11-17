@@ -43,7 +43,7 @@
       const yearText = (m.release_date && m.release_date.split('-')[0]) || 'TBD';
       const posterUrl = m.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
       item.innerHTML = `
-        <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover cursor-pointer relative group">
+        <div class="modern-card rounded-2xl overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer relative group shadow-md hover:shadow-xl">
           <div class="absolute top-2 right-2 z-10 w-8 h-8 ${complete ? 'bg-green-500' : 'bg-red-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="${complete ? 'Complete (title + poster)' : 'Missing poster/title'}">
             <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${complete ? 'M5 13l4 4L19 7' : 'M6 18L18 6M6 6l12 12'}"></path>
@@ -56,7 +56,7 @@
           </div>
           <img loading="lazy" src="${posterUrl}" 
                alt="${m.title}"
-               class="w-full h-auto max-h-[200px] object-cover neumorphic"
+               class="w-full h-auto max-h-[200px] object-contain neumorphic"
                onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
           <div class="p-2">
             <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${m.title}</h5>
@@ -182,7 +182,7 @@
           const posterTitle = m._posterSource === 'tmdb' ? 'Poster from TMDb' : (m._posterSource === 'letterboxd' ? 'Poster from Letterboxd' : 'No poster available');
           const posterUrl = m.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
           item.innerHTML = `
-            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover cursor-pointer relative group">
+            <div class="modern-card rounded-2xl overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer relative group shadow-md hover:shadow-xl">
               <div class="absolute top-2 right-2 z-10 w-8 h-8 ${complete ? 'bg-green-500' : 'bg-red-500'} rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity" title="${complete ? 'Complete (title + poster)' : 'Missing poster/title'}">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${complete ? 'M5 13l4 4L19 7' : 'M6 18L18 6M6 6l12 12'}"></path>
@@ -195,7 +195,7 @@
               </div>
               <img loading="lazy" src="${posterUrl}" 
                    alt="${m.title}" title="${posterTitle}"
-                   class="w-full h-auto max-h-[200px] object-cover neumorphic"
+                   class="w-full h-auto max-h-[200px] object-contain neumorphic"
                    onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
               <div class="p-2">
                 <h5 class="text-xs font-semibold text-black dark:text-white mb-1 line-clamp-2 min-h-[2.5rem]">${m.title}</h5>
