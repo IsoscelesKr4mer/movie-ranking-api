@@ -633,7 +633,41 @@ function displayComparison(comparison, status) {
     if (status) {
         const progress = status.ranked_count || 0;
         const total = status.total_movies || 0;
-        progressSpan.textContent = `Progress: ${progress} / ${total} movies ranked`;
+        const remaining = status.remaining_comparisons || 0;
+        
+        // Calculate progress percentage
+        // For merge sort, we estimate total comparisons needed
+        // Rough estimate: n*log2(n) comparisons for n movies
+        let progressPercentage = 0;
+        if (total > 0 && remaining !== undefined) {
+            // Estimate total comparisons needed (roughly n*log2(n))
+            const estimatedTotalComparisons = total > 1 ? Math.ceil(total * Math.log2(total)) : 0;
+            const completedComparisons = estimatedTotalComparisons - remaining;
+            progressPercentage = estimatedTotalComparisons > 0 
+                ? Math.min(100, Math.max(0, (completedComparisons / estimatedTotalComparisons) * 100))
+                : 0;
+        } else if (total > 0) {
+            // Fallback: use ranked count vs total
+            progressPercentage = (progress / total) * 100;
+        }
+        
+        if (progressSpan) {
+            if (remaining > 0) {
+                progressSpan.textContent = `${progress}/${total} ranked • ${remaining} comparisons left`;
+            } else {
+                progressSpan.textContent = `${progress}/${total} ranked`;
+            }
+        }
+        
+        // Update progress bar
+        const progressBar = document.getElementById('progress-bar');
+        const progressPercentageSpan = document.getElementById('progress-percentage');
+        if (progressBar) {
+            progressBar.style.width = `${progressPercentage}%`;
+        }
+        if (progressPercentageSpan) {
+            progressPercentageSpan.textContent = `${Math.round(progressPercentage)}%`;
+        }
     }
 
     // Update ranking ID display
