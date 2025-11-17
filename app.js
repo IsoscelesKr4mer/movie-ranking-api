@@ -72,6 +72,7 @@ const importJsonBtn = document.getElementById('import-json-btn');
 const customItemCounter = document.getElementById('custom-item-counter');
 const customItemsPreview = document.getElementById('custom-items-preview');
 const loadCustomListBtn = document.getElementById('load-custom-list-btn');
+const saveCustomListBtn = document.getElementById('save-custom-list-btn');
 const toggleCustomListsBtn = document.getElementById('toggle-custom-lists-btn');
 const manageCustomListsSection = document.getElementById('manage-custom-lists-section');
 const savedCustomLists = document.getElementById('saved-custom-lists');
@@ -93,6 +94,7 @@ importLetterboxdBtn.addEventListener('click', importLetterboxdList);
 if (sampleDataBtn) sampleDataBtn.addEventListener('click', loadSampleData);
 if (clearCustomListBtn) clearCustomListBtn.addEventListener('click', clearCustomListInput);
 if (importJsonBtn) importJsonBtn.addEventListener('click', importFromJSON);
+if (saveCustomListBtn) saveCustomListBtn.addEventListener('click', saveCustomListFromForm);
 if (loadCustomListBtn) loadCustomListBtn.addEventListener('click', loadCustomList);
 if (toggleCustomListsBtn) toggleCustomListsBtn.addEventListener('click', toggleCustomLists);
 if (customListsSearch) customListsSearch.addEventListener('input', filterCustomLists);
@@ -2192,6 +2194,18 @@ function loadCustomListsFromStorage() {
         console.warn('Failed to load custom lists:', e);
         savedCustomLists.innerHTML = '<p class="text-gray-400">Error loading lists</p>';
     }
+}
+
+function saveCustomListFromForm() {
+    if (!customListNameInput) return;
+    
+    const items = createCustomList();
+    if (!items) return;
+    
+    const listName = customListNameInput.value.trim();
+    
+    // Save the list
+    saveCustomList(listName, items);
 }
 
 function loadCustomList() {
