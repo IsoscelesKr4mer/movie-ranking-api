@@ -553,7 +553,7 @@ async function confirmSelection() {
         comparisonsMade = 0;
         
         const data = await apiCall(
-            `/api/session/${sessionId}/movies/select`,
+            `/api/session/${sessionId || window.sessionId}/movies/select`,
             'POST',
             { movie_ids: movieIdsArray }
         );
