@@ -1103,23 +1103,36 @@ function copyShareLink() {
     });
 }
 
-// Convert image to data URL to avoid CORS issues
-function imageToDataUrl(img) {
-    return new Promise((resolve) => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        
-        try {
-            ctx.drawImage(img, 0, 0);
-            const dataUrl = canvas.toDataURL('image/png');
-            resolve(dataUrl);
-        } catch (e) {
-            // If CORS fails, try to load via proxy or use placeholder
-            resolve(img.src);
+// Fetch image and convert to blob/data URL to avoid CORS issues
+async function imageToDataUrl(img) {
+    try {
+        // Try to fetch the image through a CORS proxy or directly
+        const response = await fetch(img.src, { mode: 'cors' });
+        if (response.ok) {
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => resolve(img.src); // Fallback to original
+                reader.readAsDataURL(blob);
+            });
         }
-    });
+    } catch (e) {
+        // If fetch fails, try canvas approach
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.naturalWidth || img.width || 300;
+            canvas.height = img.naturalHeight || img.height || 450;
+            
+            ctx.drawImage(img, 0, 0);
+            return canvas.toDataURL('image/png');
+        } catch (canvasError) {
+            // If both fail, return original src (html2canvas will handle it)
+            return img.src;
+        }
+    }
+    return img.src;
 }
 
 function downloadShareImage() {
@@ -1177,16 +1190,52 @@ function downloadShareImage() {
                 scrollX: 0,
                 scrollY: 0,
                 windowWidth: shareCardPreview.scrollWidth,
-                windowHeight: shareCardPreview.scrollHeight
+                windowHeight: shareCardPreview.scrollHeight,
+                onclone: (clonedDoc) => {
+                    // Ensure all images in cloned doc are loaded
+                    const clonedImages = clonedDoc.querySelectorAll('img');
+                    clonedImages.forEach(clonedImg => {
+                        if (clonedImg.complete && clonedImg.naturalHeight !== 0) {
+                            return;
+                        }
+                        // Force reload
+                        const originalSrc = clonedImg.src;
+                        clonedImg.src = '';
+                        clonedImg.src = originalSrc;
+                    });
+                }
             }).then(canvas => {
-                const link = document.createElement('a');
-                link.download = `movie-ranking-${sessionId || 'ranking'}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-                showMessage('Image downloaded!', 'success');
-            }).catch(err => {
-                console.error('Error generating image:', err);
-                showMessage('Failed to generate image. Make sure all images are loaded.', 'error');
+                // Convert canvas to blob and download
+                canvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.download = `movie-ranking-${sessionId || 'ranking'}.png`;
+                    link.href = url;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                    showMessage('Image downloaded!', 'success');
+                    
+                    // Restore original image sources
+                    images.forEach(img => {
+                        const originalSrc = img.getAttribute('data-src');
+                        if (originalSrc) {
+                            img.src = originalSrc;
+                            img.removeAttribute('data-src');
+                        }
+                    });
+                }, 'image/png');
+            }).catch(error => {
+                console.error('Failed to generate image:', error);
+                showMessage('Failed to generate image. Please try again.', 'error');
+                
+                // Restore original image sources on error
+                images.forEach(img => {
+                    const originalSrc = img.getAttribute('data-src');
+                    if (originalSrc) {
+                        img.src = originalSrc;
+                        img.removeAttribute('data-src');
+                    }
+                });
             });
         }, 500);
     });
