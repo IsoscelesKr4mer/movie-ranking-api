@@ -686,14 +686,17 @@ function displayComparison(comparison, status) {
     // Progress - calculate based on comparisons made
     if (totalMoviesToRank > 0) {
         // Estimate total comparisons needed for merge sort: approximately n*log2(n)
+        // Use a more accurate upper bound: n*log2(n) + n for worst case
         const estimatedTotalComparisons = totalMoviesToRank > 1 
-            ? Math.ceil(totalMoviesToRank * Math.log2(totalMoviesToRank))
+            ? Math.ceil(totalMoviesToRank * (Math.log2(totalMoviesToRank) + 1))
             : 0;
         
         // Calculate progress percentage
         let progressPercentage = 0;
         if (estimatedTotalComparisons > 0) {
-            progressPercentage = Math.min(100, Math.max(0, (comparisonsMade / estimatedTotalComparisons) * 100));
+            // Use a smoother progress calculation that accounts for uncertainty
+            // Cap at 95% until actually complete to avoid showing 100% prematurely
+            progressPercentage = Math.min(95, Math.max(0, (comparisonsMade / estimatedTotalComparisons) * 100));
         }
         
         // Update progress bar
@@ -737,7 +740,12 @@ async function makeChoice(choice) {
         );
 
         if (data.message === 'Ranking complete' && data.results) {
-            // Ranking is complete!
+            // Ranking is complete! Set progress to 100%
+            const progressBar = document.getElementById('progress-bar');
+            if (progressBar) {
+                progressBar.style.width = '100%';
+            }
+            
             showMessage('Ranking complete!', 'success');
             comparisonContainer.classList.add('hidden');
             // Re-enable body scroll
@@ -829,42 +837,104 @@ function displayResults(data) {
     window.lastRankedMovies = rankedMovies;
     
     // Update share card with all ranked movies
+    const shareCardTopMovies = document.getElementById('share-card-top-movies');
     if (shareCardAllMovies && rankedMovies.length > 0) {
+        // Clear existing content
         shareCardAllMovies.innerHTML = '';
+        if (shareCardTopMovies) shareCardTopMovies.innerHTML = '';
+        
         const movieCount = rankedMovies.length;
         
-        // Calculate grid columns for square card - optimize for square layout
-        let gridCols = 2;
-        if (movieCount <= 4) gridCols = 2;
-        else if (movieCount <= 9) gridCols = 3;
-        else if (movieCount <= 16) gridCols = 4;
-        else if (movieCount <= 25) gridCols = 5;
-        else gridCols = Math.ceil(Math.sqrt(movieCount));
-        
-        shareCardAllMovies.className = `grid gap-1.5 sm:gap-2 overflow-hidden`;
-        shareCardAllMovies.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
-        shareCardAllMovies.style.gridAutoRows = '1fr';
-        
-        rankedMovies.forEach((movie, idx) => {
-            const rank = idx + 1;
-            const movieDiv = document.createElement('div');
-            movieDiv.className = 'text-center flex flex-col min-h-0';
-            const posterUrl = movie.poster_url || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'225\'%3E%3Crect fill=\'%23ddd\' width=\'150\' height=\'225\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Poster%3C/text%3E%3C/svg%3E';
-            movieDiv.innerHTML = `
-                <div class="relative flex-shrink-0 mb-1 flex-1 min-h-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded">
-                    <div class="absolute top-1 left-1 z-20 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-lg border-2 border-white dark:border-gray-900">
-                        ${rank}
+        // Display top 3 movies prominently
+        if (shareCardTopMovies && movieCount >= 3) {
+            const top3 = rankedMovies.slice(0, 3);
+            top3.forEach((movie, idx) => {
+                const rank = idx + 1;
+                const medalColors = [
+                    'from-yellow-400 to-yellow-600', // Gold
+                    'from-gray-300 to-gray-500',     // Silver
+                    'from-amber-600 to-amber-800'    // Bronze
+                ];
+                const medalEmojis = ['🥇', '🥈', '🥉'];
+                const posterUrl = movie.poster_url || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'225\'%3E%3Crect fill=\'%23ddd\' width=\'150\' height=\'225\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Poster%3C/text%3E%3C/svg%3E';
+                
+                const topMovieDiv = document.createElement('div');
+                topMovieDiv.className = 'flex flex-col items-center';
+                topMovieDiv.innerHTML = `
+                    <div class="relative w-full aspect-[2/3] mb-2 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm border border-white/20 shadow-xl">
+                        <div class="absolute top-1 right-1 z-20 bg-gradient-to-r ${medalColors[idx]} text-white font-bold rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm shadow-lg border-2 border-white">
+                            ${medalEmojis[idx]}
+                        </div>
+                        <img src="${posterUrl}" 
+                             alt="${movie.title}"
+                             class="w-full h-full object-cover"
+                             loading="eager">
                     </div>
-                    <img src="${posterUrl}" 
-                         alt="${movie.title}"
-                         class="w-full h-full object-contain rounded max-h-full"
-                         style="max-height: 100%;"
-                         loading="eager">
-                </div>
-                <p class="text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto px-0.5">${movie.title}</p>
-            `;
-            shareCardAllMovies.appendChild(movieDiv);
-        });
+                    <p class="text-[10px] sm:text-xs text-white font-semibold text-center line-clamp-2 leading-tight px-1 drop-shadow-md">${movie.title}</p>
+                `;
+                shareCardTopMovies.appendChild(topMovieDiv);
+            });
+        } else if (shareCardTopMovies && movieCount > 0) {
+            // If less than 3 movies, show what we have
+            rankedMovies.slice(0, movieCount).forEach((movie, idx) => {
+                const rank = idx + 1;
+                const posterUrl = movie.poster_url || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'225\'%3E%3Crect fill=\'%23ddd\' width=\'150\' height=\'225\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Poster%3C/text%3E%3C/svg%3E';
+                
+                const topMovieDiv = document.createElement('div');
+                topMovieDiv.className = 'flex flex-col items-center';
+                topMovieDiv.innerHTML = `
+                    <div class="relative w-full aspect-[2/3] mb-2 rounded-lg overflow-hidden bg-white/10 backdrop-blur-sm border border-white/20 shadow-xl">
+                        <div class="absolute top-1 right-1 z-20 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-full w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-xs sm:text-sm shadow-lg border-2 border-white">
+                            ${rank}
+                        </div>
+                        <img src="${posterUrl}" 
+                             alt="${movie.title}"
+                             class="w-full h-full object-cover"
+                             loading="eager">
+                    </div>
+                    <p class="text-[10px] sm:text-xs text-white font-semibold text-center line-clamp-2 leading-tight px-1 drop-shadow-md">${movie.title}</p>
+                `;
+                shareCardTopMovies.appendChild(topMovieDiv);
+            });
+        }
+        
+        // Display remaining movies in a grid (skip top 3 if we have 3+)
+        const remainingMovies = movieCount > 3 ? rankedMovies.slice(3) : [];
+        if (remainingMovies.length > 0) {
+            // Calculate grid columns for remaining movies - optimize for 4:5 aspect ratio
+            let gridCols = 3;
+            if (remainingMovies.length <= 6) gridCols = 3;
+            else if (remainingMovies.length <= 12) gridCols = 4;
+            else if (remainingMovies.length <= 20) gridCols = 5;
+            else gridCols = 5; // Max 5 columns for readability
+            
+            shareCardAllMovies.className = `grid gap-1 sm:gap-1.5 overflow-hidden`;
+            shareCardAllMovies.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
+            shareCardAllMovies.style.gridAutoRows = '1fr';
+            
+            remainingMovies.forEach((movie, idx) => {
+                const rank = idx + 4; // Start from rank 4
+                const movieDiv = document.createElement('div');
+                movieDiv.className = 'text-center flex flex-col min-h-0';
+                const posterUrl = movie.poster_url || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'225\'%3E%3Crect fill=\'%23ddd\' width=\'150\' height=\'225\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Poster%3C/text%3E%3C/svg%3E';
+                movieDiv.innerHTML = `
+                    <div class="relative flex-shrink-0 mb-1 flex-1 min-h-0 flex items-center justify-center bg-white/5 backdrop-blur-sm rounded border border-white/10">
+                        <div class="absolute top-0.5 left-0.5 z-20 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-[8px] sm:text-[10px] shadow-md border border-white/30">
+                            ${rank}
+                        </div>
+                        <img src="${posterUrl}" 
+                             alt="${movie.title}"
+                             class="w-full h-full object-cover rounded"
+                             loading="eager">
+                    </div>
+                    <p class="text-[8px] sm:text-[10px] text-white/90 line-clamp-1 font-medium leading-tight mt-auto px-0.5 drop-shadow-sm">${movie.title}</p>
+                `;
+                shareCardAllMovies.appendChild(movieDiv);
+            });
+        } else if (movieCount <= 3) {
+            // If 3 or fewer movies total, show them all in top section and leave grid empty
+            shareCardAllMovies.style.display = 'none';
+        }
     }
 
     rankedMovies.forEach((movie, index) => {
