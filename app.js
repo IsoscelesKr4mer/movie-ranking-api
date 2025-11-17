@@ -849,7 +849,7 @@ function displayResults(data) {
             const rank = idx + 1;
             const movieDiv = document.createElement('div');
             movieDiv.className = 'text-center flex flex-col min-h-0';
-            const posterUrl = movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster';
+            const posterUrl = movie.poster_url || 'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'150\' height=\'225\'%3E%3Crect fill=\'%23ddd\' width=\'150\' height=\'225\'/%3E%3Ctext fill=\'%23999\' font-family=\'sans-serif\' font-size=\'14\' x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dominant-baseline=\'middle\'%3ENo Poster%3C/text%3E%3C/svg%3E';
             movieDiv.innerHTML = `
                 <div class="relative flex-shrink-0 mb-1 flex-1 min-h-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800 rounded">
                     <div class="absolute top-1 left-1 z-20 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-lg border-2 border-white dark:border-gray-900">
@@ -861,7 +861,10 @@ function displayResults(data) {
                          style="max-height: 100%;"
                          crossorigin="anonymous"
                          loading="eager"
-                         onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="hidden w-full h-full items-center justify-center text-xs text-gray-500">
+                        No Poster
+                    </div>
                 </div>
                 <p class="text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto px-0.5">${movie.title}</p>
             `;
@@ -1143,6 +1146,16 @@ function copyShareLink() {
 
 // Convert image to data URL using fetch to avoid CORS issues
 async function imageToDataUrl(img) {
+    // Skip if already a data URL or placeholder
+    if (img.src.startsWith('data:') || img.src.includes('placeholder')) {
+        return img.src;
+    }
+    
+    // Skip if image hasn't loaded properly
+    if (!img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) {
+        return img.src;
+    }
+    
     try {
         // Try to fetch the image
         const response = await fetch(img.src, { mode: 'cors' });
@@ -1152,7 +1165,7 @@ async function imageToDataUrl(img) {
                 const reader = new FileReader();
                 reader.onload = () => resolve(reader.result);
                 reader.onerror = () => {
-                    // Fallback: try canvas approach
+                    // Fallback: try canvas approach (but this might fail with CORS)
                     try {
                         const canvas = document.createElement('canvas');
                         const ctx = canvas.getContext('2d');
@@ -1161,7 +1174,8 @@ async function imageToDataUrl(img) {
                         ctx.drawImage(img, 0, 0);
                         resolve(canvas.toDataURL('image/png'));
                     } catch (e) {
-                        resolve(img.src); // Return original if all fails
+                        // Return original if all fails
+                        resolve(img.src);
                     }
                 };
                 reader.readAsDataURL(blob);
@@ -1194,8 +1208,14 @@ async function imageToDataUrl(img) {
 // Load image and convert to data URL for html2canvas
 async function ensureImageLoaded(img) {
     return new Promise(async (resolve) => {
-        if (img.complete && img.naturalHeight !== 0) {
-            // Image is loaded, convert to data URL
+        // Skip placeholder images - they often fail CORS and aren't needed
+        if (img.src && (img.src.includes('via.placeholder.com') || img.src.includes('placeholder'))) {
+            resolve();
+            return;
+        }
+        
+        if (img.complete && img.naturalHeight !== 0 && img.naturalWidth !== 0) {
+            // Image is loaded, try to convert to data URL
             try {
                 const dataUrl = await imageToDataUrl(img);
                 if (dataUrl && dataUrl !== img.src && dataUrl.startsWith('data:')) {
@@ -1204,6 +1224,7 @@ async function ensureImageLoaded(img) {
                 }
             } catch (e) {
                 console.warn('Failed to convert image:', e);
+                // Keep original src if conversion fails
             }
             resolve();
             return;
@@ -1223,6 +1244,7 @@ async function ensureImageLoaded(img) {
                 }
             } catch (e) {
                 console.warn('Failed to convert image:', e);
+                // Keep original src if conversion fails
             }
             resolve();
         };
