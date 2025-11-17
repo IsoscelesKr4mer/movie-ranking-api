@@ -565,9 +565,8 @@ async function confirmSelection() {
         
         showMessage(`Selected ${data.selected_count} movies! Starting ranking...`, 'success');
         
-        // Hide selection section and show ranking section
+        // Hide selection section
         selectionSection.classList.add('hidden');
-        rankingSection.classList.remove('hidden');
         
         showLoading(false);
         
