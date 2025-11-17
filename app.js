@@ -1693,34 +1693,51 @@ function clearSessionManually() {
     }
 }
 
-function saveRankingToHistory(rankedMovies, unseenMovies = []) {
+async function saveRankingToHistory(rankedMovies, unseenMovies = []) {
+    const ranking = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        listName: getCurrentListName(),
+        type: loadTypeSelect.value, // 'category', 'year', 'custom'
+        rankedMovies: rankedMovies,
+        unseenMovies: unseenMovies,
+        totalComparisons: comparisonsMade
+    };
+    
+    try {
+        // Try to save to cloud first
+        if (window.supabaseService && currentUser) {
+            await window.supabaseService.saveRankingToCloud(ranking);
+        } else {
+            // Fallback to localStorage
+            saveRankingToHistoryLocal(rankedMovies, unseenMovies);
+        }
+    } catch (e) {
+        // Fallback to localStorage on error
+        saveRankingToHistoryLocal(rankedMovies, unseenMovies);
+    }
+    
+    // Always clear active session
+    localStorage.removeItem('active_ranking_session');
+}
+
+function saveRankingToHistoryLocal(rankedMovies, unseenMovies = []) {
     try {
         const history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
-        
         const ranking = {
             id: Date.now().toString(),
             timestamp: Date.now(),
             listName: getCurrentListName(),
-            type: loadTypeSelect.value, // 'category', 'year', 'custom'
+            type: loadTypeSelect.value,
             rankedMovies: rankedMovies,
             unseenMovies: unseenMovies,
             totalComparisons: comparisonsMade
         };
-        
-        history.unshift(ranking); // Add to beginning
-        
-        // Keep only last 50 rankings
-        if (history.length > 50) {
-            history.length = 50;
-        }
-        
+        history.unshift(ranking);
+        if (history.length > 50) history.length = 50;
         localStorage.setItem('ranking_history', JSON.stringify(history));
-        
-        // Clear active session
-        localStorage.removeItem('active_ranking_session');
-        
     } catch (e) {
-        console.warn('Failed to save ranking history:', e);
+        console.warn('Failed to save ranking locally:', e);
     }
 }
 
@@ -1897,6 +1914,253 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
+// ==================== AUTHENTICATION FUNCTIONS ====================
+
+let currentUser = null;
+
+async function initAuth() {
+    if (!window.supabaseService) return;
+    
+    // Check for existing session
+    const session = await window.supabaseService.getCurrentSession();
+    if (session) {
+        currentUser = await window.supabaseService.getCurrentUser();
+        updateAuthUI();
+    }
+    
+    // Listen for auth changes
+    window.supabaseService.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            currentUser = await window.supabaseService.getCurrentUser();
+            updateAuthUI();
+            // Sync data from cloud
+            await syncDataFromCloud();
+        } else if (event === 'SIGNED_OUT') {
+            currentUser = null;
+            updateAuthUI();
+        }
+    });
+}
+
+function updateAuthUI() {
+    const signInBtn = document.getElementById('sign-in-btn');
+    const userMenu = document.getElementById('user-menu');
+    const userName = document.getElementById('user-name');
+    
+    if (!signInBtn || !userMenu) return;
+    
+    if (currentUser) {
+        signInBtn.classList.add('hidden');
+        userMenu.classList.remove('hidden');
+        if (userName) {
+            const displayName = currentUser.user_metadata?.display_name || currentUser.email?.split('@')[0] || 'User';
+            userName.textContent = displayName;
+        }
+    } else {
+        signInBtn.classList.remove('hidden');
+        userMenu.classList.add('hidden');
+    }
+}
+
+function showAuthModal(mode = 'signin') {
+    const modal = document.getElementById('auth-modal');
+    const title = document.getElementById('auth-modal-title');
+    const signinDiv = document.getElementById('auth-signin');
+    const signupDiv = document.getElementById('auth-signup');
+    
+    if (!modal) return;
+    
+    if (mode === 'signin') {
+        if (title) title.textContent = 'Sign In';
+        if (signinDiv) signinDiv.classList.remove('hidden');
+        if (signupDiv) signupDiv.classList.add('hidden');
+    } else {
+        if (title) title.textContent = 'Sign Up';
+        if (signinDiv) signinDiv.classList.add('hidden');
+        if (signupDiv) signupDiv.classList.remove('hidden');
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function handleSignIn() {
+    const email = document.getElementById('signin-email')?.value;
+    const password = document.getElementById('signin-password')?.value;
+    
+    if (!email || !password) {
+        showMessage('Please enter email and password', 'error');
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        await window.supabaseService.signIn(email, password);
+        showMessage('Signed in successfully!', 'success');
+        closeAuthModal();
+        await syncDataFromCloud();
+    } catch (error) {
+        showMessage(error.message || 'Failed to sign in', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function handleSignUp() {
+    const name = document.getElementById('signup-name')?.value;
+    const email = document.getElementById('signup-email')?.value;
+    const password = document.getElementById('signup-password')?.value;
+    
+    if (!name || !email || !password) {
+        showMessage('Please fill in all fields', 'error');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showMessage('Password must be at least 6 characters', 'error');
+        return;
+    }
+    
+    try {
+        showLoading(true);
+        await window.supabaseService.signUp(email, password, name);
+        showMessage('Account created! Please check your email to verify.', 'success');
+        closeAuthModal();
+    } catch (error) {
+        showMessage(error.message || 'Failed to sign up', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function handleSignOut() {
+    try {
+        await window.supabaseService.signOut();
+        currentUser = null;
+        updateAuthUI();
+        showMessage('Signed out successfully', 'info');
+    } catch (error) {
+        showMessage('Failed to sign out', 'error');
+    }
+}
+
+async function syncDataFromCloud() {
+    if (!currentUser) return;
+    
+    try {
+        // Sync rankings
+        const cloudRankings = await window.supabaseService.loadRankingsFromCloud();
+        if (cloudRankings && cloudRankings.length > 0) {
+            localStorage.setItem('ranking_history', JSON.stringify(cloudRankings));
+        }
+        
+        // Sync custom lists
+        const cloudLists = await window.supabaseService.loadCustomListsFromCloud();
+        if (cloudLists && cloudLists.length > 0) {
+            localStorage.setItem('custom_ranking_lists', JSON.stringify(cloudLists));
+            if (manageCustomListsSection && !manageCustomListsSection.classList.contains('hidden')) {
+                loadCustomListsFromStorage();
+            }
+        }
+    } catch (error) {
+        console.warn('Failed to sync data from cloud:', error);
+    }
+}
+
+// ==================== COMMUNITY TEMPLATES ====================
+
+async function showCommunityTemplates() {
+    const modal = document.getElementById('community-templates-modal');
+    if (!modal) return;
+    
+    modal.classList.remove('hidden');
+    await loadCommunityTemplates();
+}
+
+function closeCommunityTemplatesModal() {
+    const modal = document.getElementById('community-templates-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function loadCommunityTemplates(searchTerm = '') {
+    const list = document.getElementById('community-templates-list');
+    if (!list) return;
+    
+    try {
+        list.innerHTML = '<p class="text-gray-400 text-center py-8">Loading templates...</p>';
+        
+        const templates = await window.supabaseService.loadCommunityTemplates(searchTerm);
+        
+        if (templates.length === 0) {
+            list.innerHTML = '<p class="text-gray-400 text-center py-8">No templates found</p>';
+            return;
+        }
+        
+        list.innerHTML = templates.map(template => `
+            <div class="glass rounded-lg p-4">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-white mb-1">${template.name}</h4>
+                        <p class="text-xs text-gray-400">By ${template.author} • ${template.items.length} items</p>
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        ${template.items.slice(0, 3).map(item => `
+                            <img src="${item.poster_url}" alt="${item.title}" 
+                                 class="w-8 h-12 object-cover rounded" 
+                                 onerror="this.src='https://via.placeholder.com/50x75'">
+                        `).join('')}
+                    </div>
+                </div>
+                <button onclick="importCommunityTemplate('${template.id}')" class="btn-minimal text-xs px-3 py-1 mt-2">
+                    Import Template
+                </button>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load templates:', error);
+        list.innerHTML = '<p class="text-gray-400 text-center py-8">Failed to load templates</p>';
+    }
+}
+
+async function importCommunityTemplate(templateId) {
+    try {
+        showLoading(true);
+        const template = await window.supabaseService.importCommunityTemplate(templateId);
+        
+        if (template) {
+            showMessage('Template imported successfully!', 'success');
+            closeCommunityTemplatesModal();
+            
+            // Load into editor
+            customListItems = template.items.map((item, index) => ({
+                ...item,
+                id: -(index + 1)
+            }));
+            
+            if (customListNameInput) customListNameInput.value = template.name;
+            renderCustomItemsList();
+            updateCustomItemCounter();
+            
+            // Switch to custom list mode
+            loadTypeSelect.value = 'custom';
+            handleLoadTypeChange();
+        }
+    } catch (error) {
+        showMessage(error.message || 'Failed to import template', 'error');
+    } finally {
+        showLoading(false);
+    }
+}
+
+// Template search
+document.getElementById('template-search')?.addEventListener('input', async (e) => {
+    await loadCommunityTemplates(e.target.value);
+});
+
 // Expose functions to global scope for onclick handlers
 window.loadCustomListById = loadCustomListById;
 window.editCustomList = editCustomList;
@@ -1908,6 +2172,14 @@ window.reRankList = reRankList;
 window.deletePastRanking = deletePastRanking;
 window.exportAllRankings = exportAllRankings;
 window.clearSessionManually = clearSessionManually;
+window.showAuthModal = showAuthModal;
+window.closeAuthModal = closeAuthModal;
+window.handleSignIn = handleSignIn;
+window.handleSignUp = handleSignUp;
+window.handleSignOut = handleSignOut;
+window.showCommunityTemplates = showCommunityTemplates;
+window.closeCommunityTemplatesModal = closeCommunityTemplatesModal;
+window.importCommunityTemplate = importCommunityTemplate;
 
 // Initialize
 console.log('Initializing Movie Ranking App...');
@@ -1925,6 +2197,9 @@ if (rankingId) {
 } else {
     // Normal initialization
     loadCategories();
+    
+    // Initialize authentication
+    initAuth();
     
     // Check for active session on page load
     if (document.readyState === 'loading') {
@@ -2217,33 +2492,48 @@ function createCustomList() {
 // Expose removeCustomItem to global scope for onclick handlers
 window.removeCustomItem = removeCustomItem;
 
-function saveCustomList(listName, items) {
+async function saveCustomList(listName, items, isPublic = false) {
     try {
-        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        // Try to save to cloud first
+        if (window.supabaseService && currentUser) {
+            const saved = await window.supabaseService.saveCustomListToCloud(listName, items, isPublic);
+            if (saved) {
+                showMessage(`Saved "${listName}" with ${items.length} items to cloud`, 'success');
+            }
+        } else {
+            // Fallback to localStorage
+            const saved = saveCustomListLocal(listName, items);
+            if (saved) {
+                showMessage(`Saved "${listName}" with ${items.length} items`, 'success');
+            }
+        }
         
-        const newList = {
-            id: Date.now().toString(),
-            name: listName,
-            created: Date.now(),
-            items: items
-        };
-        
-        lists.push(newList);
-        localStorage.setItem('custom_ranking_lists', JSON.stringify(lists));
-        
-        showMessage(`Saved "${listName}" with ${items.length} items`, 'success');
         loadCustomListsFromStorage();
     } catch (e) {
         console.warn('Failed to save custom list:', e);
-        showMessage('Failed to save list. Storage may be full.', 'error');
+        // Try localStorage fallback
+        try {
+            saveCustomListLocal(listName, items);
+            showMessage(`Saved "${listName}" locally (cloud save failed)`, 'info');
+        } catch (localError) {
+            showMessage('Failed to save list. Storage may be full.', 'error');
+        }
     }
 }
 
-function loadCustomListsFromStorage() {
+async function loadCustomListsFromStorage() {
     if (!savedCustomLists) return;
     
     try {
-        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        let lists = [];
+        
+        // Try to load from cloud first
+        if (window.supabaseService && currentUser) {
+            lists = await window.supabaseService.loadCustomListsFromCloud();
+        } else {
+            // Fallback to localStorage
+            lists = loadCustomListsFromLocal();
+        }
         
         if (lists.length === 0) {
             savedCustomLists.innerHTML = '<p class="text-gray-400">No saved lists yet</p>';
@@ -2269,15 +2559,68 @@ function loadCustomListsFromStorage() {
                     <button onclick="loadCustomListById('${list.id}')" class="btn-minimal text-xs px-3 py-1">Load</button>
                     <button onclick="editCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1">Edit</button>
                     <button onclick="exportCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1">Export</button>
+                    ${currentUser ? `<button onclick="shareAsTemplate('${list.id}')" class="btn-minimal text-xs px-3 py-1">Share</button>` : ''}
                     <button onclick="deleteCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1 text-red-400">Delete</button>
                 </div>
             </div>
         `).join('');
     } catch (e) {
         console.warn('Failed to load custom lists:', e);
-        savedCustomLists.innerHTML = '<p class="text-gray-400">Error loading lists</p>';
+        // Fallback to localStorage
+        const localLists = loadCustomListsFromLocal();
+        if (localLists.length === 0) {
+            savedCustomLists.innerHTML = '<p class="text-gray-400">Error loading lists</p>';
+        } else {
+            // Display local lists
+            savedCustomLists.innerHTML = localLists.map(list => `
+                <div class="glass rounded-lg p-4 mb-3">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1">
+                            <h4 class="font-semibold text-white">${list.name}</h4>
+                            <p class="text-xs text-gray-400">${list.items.length} items • ${new Date(list.created).toLocaleDateString()}</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="loadCustomListById('${list.id}')" class="btn-minimal text-xs px-3 py-1">Load</button>
+                        <button onclick="editCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1">Edit</button>
+                        <button onclick="deleteCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1 text-red-400">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
     }
 }
+
+async function shareAsTemplate(listId) {
+    if (!currentUser || !window.supabaseService) {
+        showMessage('Please sign in to share templates', 'error');
+        return;
+    }
+    
+    try {
+        const supabaseClient = window.supabaseService.supabase;
+        if (!supabaseClient) {
+            throw new Error('Supabase not initialized');
+        }
+        
+        // Update list to be public
+        const { error } = await supabaseClient
+            .from('custom_lists')
+            .update({ is_public: true })
+            .eq('id', listId)
+            .eq('user_id', currentUser.id);
+        
+        if (error) throw error;
+        
+        showMessage('List shared as community template!', 'success');
+        loadCustomListsFromStorage();
+    } catch (error) {
+        console.error('Failed to share template:', error);
+        showMessage('Failed to share template', 'error');
+    }
+}
+
+window.shareAsTemplate = shareAsTemplate;
 
 function saveCustomListFromForm() {
     if (!customListNameInput) return;
