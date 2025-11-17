@@ -1103,36 +1103,36 @@ function copyShareLink() {
     });
 }
 
-// Fetch image and convert to blob/data URL to avoid CORS issues
-async function imageToDataUrl(img) {
-    try {
-        // Try to fetch the image through a CORS proxy or directly
-        const response = await fetch(img.src, { mode: 'cors' });
-        if (response.ok) {
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => resolve(img.src); // Fallback to original
-                reader.readAsDataURL(blob);
-            });
+// Load image and ensure it's ready for html2canvas
+async function ensureImageLoaded(img) {
+    return new Promise((resolve) => {
+        if (img.complete && img.naturalHeight !== 0) {
+            resolve();
+            return;
         }
-    } catch (e) {
-        // If fetch fails, try canvas approach
-        try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = img.naturalWidth || img.width || 300;
-            canvas.height = img.naturalHeight || img.height || 450;
-            
-            ctx.drawImage(img, 0, 0);
-            return canvas.toDataURL('image/png');
-        } catch (canvasError) {
-            // If both fail, return original src (html2canvas will handle it)
-            return img.src;
+        
+        const timeout = setTimeout(() => {
+            resolve(); // Resolve anyway after timeout
+        }, 5000);
+        
+        img.onload = () => {
+            clearTimeout(timeout);
+            resolve();
+        };
+        
+        img.onerror = () => {
+            clearTimeout(timeout);
+            resolve(); // Resolve even on error
+        };
+        
+        // Force reload if needed
+        if (!img.src || img.src === '') {
+            const originalSrc = img.getAttribute('data-src') || img.getAttribute('src');
+            if (originalSrc) {
+                img.src = originalSrc;
+            }
         }
-    }
-    return img.src;
+    });
 }
 
 function downloadShareImage() {
@@ -1147,34 +1147,9 @@ function downloadShareImage() {
     // Wait a bit for images to load, then generate
     showMessage('Generating image... This may take a moment.', 'info');
     
-    // Convert all images to data URLs to avoid CORS issues
+    // Ensure all images are loaded before capturing
     const images = shareCardPreview.querySelectorAll('img');
-    const imagePromises = Array.from(images).map(async (img) => {
-        if (img.complete && img.naturalHeight !== 0) {
-            try {
-                const dataUrl = await imageToDataUrl(img);
-                img.setAttribute('data-src', img.src);
-                img.src = dataUrl;
-            } catch (e) {
-                console.warn('Failed to convert image:', e);
-            }
-            return Promise.resolve();
-        }
-        return new Promise((resolve) => {
-            img.onload = async () => {
-                try {
-                    const dataUrl = await imageToDataUrl(img);
-                    img.setAttribute('data-src', img.src);
-                    img.src = dataUrl;
-                } catch (e) {
-                    console.warn('Failed to convert image:', e);
-                }
-                resolve();
-            };
-            img.onerror = resolve; // Continue even if some images fail
-            setTimeout(resolve, 3000); // Timeout after 3 seconds
-        });
-    });
+    const imagePromises = Array.from(images).map(img => ensureImageLoaded(img));
     
     Promise.all(imagePromises).then(() => {
         // Scroll to top of share card for better image capture
@@ -1214,28 +1189,10 @@ function downloadShareImage() {
                     link.click();
                     URL.revokeObjectURL(url);
                     showMessage('Image downloaded!', 'success');
-                    
-                    // Restore original image sources
-                    images.forEach(img => {
-                        const originalSrc = img.getAttribute('data-src');
-                        if (originalSrc) {
-                            img.src = originalSrc;
-                            img.removeAttribute('data-src');
-                        }
-                    });
                 }, 'image/png');
             }).catch(error => {
                 console.error('Failed to generate image:', error);
                 showMessage('Failed to generate image. Please try again.', 'error');
-                
-                // Restore original image sources on error
-                images.forEach(img => {
-                    const originalSrc = img.getAttribute('data-src');
-                    if (originalSrc) {
-                        img.src = originalSrc;
-                        img.removeAttribute('data-src');
-                    }
-                });
             });
         }, 500);
     });
@@ -1245,34 +1202,9 @@ function downloadShareImage() {
 async function generateShareImage() {
     if (!shareCardPreview || typeof html2canvas === 'undefined') return null;
     
-    // Convert all images to data URLs
+    // Ensure all images are loaded
     const images = shareCardPreview.querySelectorAll('img');
-    await Promise.all(Array.from(images).map(async (img) => {
-        if (img.complete && img.naturalHeight !== 0) {
-            try {
-                const dataUrl = await imageToDataUrl(img);
-                img.setAttribute('data-src', img.src);
-                img.src = dataUrl;
-            } catch (e) {
-                console.warn('Failed to convert image:', e);
-            }
-        } else {
-            await new Promise((resolve) => {
-                img.onload = async () => {
-                    try {
-                        const dataUrl = await imageToDataUrl(img);
-                        img.setAttribute('data-src', img.src);
-                        img.src = dataUrl;
-                    } catch (e) {
-                        console.warn('Failed to convert image:', e);
-                    }
-                    resolve();
-                };
-                img.onerror = resolve;
-                setTimeout(resolve, 3000);
-            });
-        }
-    }));
+    await Promise.all(Array.from(images).map(img => ensureImageLoaded(img)));
     
     return new Promise((resolve) => {
         setTimeout(() => {
@@ -1288,25 +1220,9 @@ async function generateShareImage() {
                 windowHeight: shareCardPreview.scrollHeight
             }).then(canvas => {
                 const dataUrl = canvas.toDataURL('image/png');
-                // Restore original image sources
-                images.forEach(img => {
-                    const originalSrc = img.getAttribute('data-src');
-                    if (originalSrc) {
-                        img.src = originalSrc;
-                        img.removeAttribute('data-src');
-                    }
-                });
                 resolve(dataUrl);
             }).catch(error => {
                 console.error('Failed to generate image:', error);
-                // Restore original image sources
-                images.forEach(img => {
-                    const originalSrc = img.getAttribute('data-src');
-                    if (originalSrc) {
-                        img.src = originalSrc;
-                        img.removeAttribute('data-src');
-                    }
-                });
                 resolve(null);
             });
         }, 500);
