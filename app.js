@@ -859,12 +859,7 @@ function displayResults(data) {
                          alt="${movie.title}"
                          class="w-full h-full object-contain rounded max-h-full"
                          style="max-height: 100%;"
-                         crossorigin="anonymous"
-                         loading="eager"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                    <div class="hidden w-full h-full items-center justify-center text-xs text-gray-500">
-                        No Poster
-                    </div>
+                         loading="eager">
                 </div>
                 <p class="text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto px-0.5">${movie.title}</p>
             `;
@@ -1208,14 +1203,15 @@ async function imageToDataUrl(img) {
 // Load image and convert to data URL for html2canvas
 async function ensureImageLoaded(img) {
     return new Promise(async (resolve) => {
-        // Skip placeholder images - they often fail CORS and aren't needed
-        if (img.src && (img.src.includes('via.placeholder.com') || img.src.includes('placeholder'))) {
+        // Skip placeholder images and data URLs - they don't need conversion
+        if (img.src && (img.src.includes('via.placeholder.com') || img.src.includes('placeholder') || img.src.startsWith('data:'))) {
             resolve();
             return;
         }
         
+        // Wait for image to load (even if CORS fails, it may still display)
         if (img.complete && img.naturalHeight !== 0 && img.naturalWidth !== 0) {
-            // Image is loaded, try to convert to data URL
+            // Image is loaded, try to convert to data URL for html2canvas
             try {
                 const dataUrl = await imageToDataUrl(img);
                 if (dataUrl && dataUrl !== img.src && dataUrl.startsWith('data:')) {
@@ -1223,8 +1219,8 @@ async function ensureImageLoaded(img) {
                     img.src = dataUrl;
                 }
             } catch (e) {
-                console.warn('Failed to convert image:', e);
-                // Keep original src if conversion fails
+                // Keep original src if conversion fails - image will still display
+                console.warn('Failed to convert image (will use original):', e);
             }
             resolve();
             return;
@@ -1243,8 +1239,8 @@ async function ensureImageLoaded(img) {
                     img.src = dataUrl;
                 }
             } catch (e) {
-                console.warn('Failed to convert image:', e);
-                // Keep original src if conversion fails
+                // Keep original src if conversion fails - image will still display
+                console.warn('Failed to convert image (will use original):', e);
             }
             resolve();
         };
@@ -1327,13 +1323,17 @@ async function generateShareImage() {
             html2canvas(shareCardPreview, {
                 backgroundColor: null,
                 scale: 2,
-                useCORS: true,
-                allowTaint: false,
+                useCORS: false,
+                allowTaint: true,
                 logging: false,
                 scrollX: 0,
                 scrollY: 0,
                 windowWidth: shareCardPreview.scrollWidth,
-                windowHeight: shareCardPreview.scrollHeight
+                windowHeight: shareCardPreview.scrollHeight,
+                ignoreElements: (element) => {
+                    // Ignore elements that are hidden or have no content
+                    return element.style.display === 'none' || element.offsetWidth === 0 || element.offsetHeight === 0;
+                }
             }).then(canvas => {
                 const dataUrl = canvas.toDataURL('image/png');
                 resolve(dataUrl);
