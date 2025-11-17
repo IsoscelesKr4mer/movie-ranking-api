@@ -65,13 +65,9 @@ const hideShareBtn = document.getElementById('hide-share-btn');
 // Custom List DOM Elements
 const customGroup = document.getElementById('custom-group');
 const customListNameInput = document.getElementById('custom-list-name');
-const newItemNameInput = document.getElementById('new-item-name');
-const newItemImageUrlInput = document.getElementById('new-item-image-url');
-const newItemImageFileInput = document.getElementById('new-item-image-file');
-const browseImageBtn = document.getElementById('browse-image-btn');
-const imagePreviewContainer = document.getElementById('image-preview-container');
-const imagePreview = document.getElementById('image-preview');
-const addItemBtn = document.getElementById('add-item-btn');
+const bulkItemsContainer = document.getElementById('bulk-items-container');
+const addItemRowBtn = document.getElementById('add-item-row-btn');
+const addAllItemsBtn = document.getElementById('add-all-items-btn');
 const customItemsList = document.getElementById('custom-items-list');
 const sampleDataBtn = document.getElementById('sample-data-btn');
 const clearCustomListBtn = document.getElementById('clear-custom-list-btn');
