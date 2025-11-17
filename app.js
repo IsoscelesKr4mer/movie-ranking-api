@@ -2044,17 +2044,6 @@ async function handleSignUp() {
     }
 }
 
-async function handleSSOSignIn(provider) {
-    try {
-        showLoading(true);
-        await window.supabaseService.signInWithOAuth(provider);
-        // OAuth will redirect, so we don't need to do anything else here
-        // The redirect will bring the user back and initAuth() will handle the session
-    } catch (error) {
-        showLoading(false);
-        showMessage(error.message || `Failed to sign in with ${provider}`, 'error');
-    }
-}
 
 async function handleSignOut() {
     try {
@@ -2195,7 +2184,6 @@ window.showAuthModal = showAuthModal;
 window.closeAuthModal = closeAuthModal;
 window.handleSignIn = handleSignIn;
 window.handleSignUp = handleSignUp;
-window.handleSSOSignIn = handleSSOSignIn;
 window.handleSignOut = handleSignOut;
 window.showCommunityTemplates = showCommunityTemplates;
 window.closeCommunityTemplatesModal = closeCommunityTemplatesModal;
