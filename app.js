@@ -797,9 +797,7 @@ function displayResults(data) {
     // Update share card with all ranked movies
     if (shareCardAllMovies && rankedMovies.length > 0) {
         shareCardAllMovies.innerHTML = '';
-        
-        // Update share card ranking ID
-        // ID removed from share card display
+        const movieCount = rankedMovies.length;
         
         // Calculate grid columns based on movie count to fit without scrolling
         let gridCols = 2;
