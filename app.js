@@ -837,34 +837,35 @@ function displayResults(data) {
         shareCardAllMovies.innerHTML = '';
         const movieCount = rankedMovies.length;
         
-        // Calculate grid columns based on movie count to fit without scrolling
+        // Calculate grid columns for square card - optimize for square layout
         let gridCols = 2;
-        if (movieCount <= 4) gridCols = movieCount;
-        else if (movieCount <= 6) gridCols = 3;
-        else if (movieCount <= 8) gridCols = 4;
-        else if (movieCount <= 10) gridCols = 5;
+        if (movieCount <= 4) gridCols = 2;
+        else if (movieCount <= 9) gridCols = 3;
+        else if (movieCount <= 16) gridCols = 4;
+        else if (movieCount <= 25) gridCols = 5;
         else gridCols = Math.ceil(Math.sqrt(movieCount));
         
-        shareCardAllMovies.className = `grid gap-2 sm:gap-3 overflow-hidden`;
+        shareCardAllMovies.className = `grid gap-1.5 sm:gap-2 overflow-hidden`;
         shareCardAllMovies.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
+        shareCardAllMovies.style.gridAutoRows = '1fr';
         
         rankedMovies.forEach((movie, idx) => {
             const rank = idx + 1;
             const movieDiv = document.createElement('div');
-            movieDiv.className = 'text-center flex flex-col';
+            movieDiv.className = 'text-center flex flex-col min-h-0';
             const posterUrl = movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster';
             movieDiv.innerHTML = `
-                <div class="relative flex-shrink-0 mb-1">
-                    <div class="absolute -top-1 -left-1 z-10 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs shadow-lg">
+                <div class="relative flex-shrink-0 mb-1 flex-1 min-h-0 flex items-center justify-center">
+                    <div class="absolute -top-0.5 -left-0.5 z-10 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-[10px] sm:text-xs shadow-lg">
                         ${rank}
                     </div>
                     <img src="${posterUrl}" 
                          alt="${movie.title}"
-                         class="w-full h-auto object-contain rounded"
-                         style="max-height: 120px;"
+                         class="w-full h-full object-contain rounded max-h-full"
+                         style="max-height: 100%;"
                          onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
                 </div>
-                <p class="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto">${movie.title}</p>
+                <p class="text-[10px] sm:text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto px-0.5">${movie.title}</p>
             `;
             shareCardAllMovies.appendChild(movieDiv);
         });
@@ -1026,7 +1027,7 @@ function getShareText() {
 
 function shareToTwitter() {
     const text = encodeURIComponent(getShareText());
-    const url = `https://twitter.com/intent/tweet?text=${text}`;
+    const url = `https://x.com/intent/tweet?text=${text}`;
     window.open(url, '_blank', 'width=550,height=420');
 }
 
