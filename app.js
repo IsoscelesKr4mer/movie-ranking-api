@@ -801,22 +801,34 @@ function displayResults(data) {
         // Update share card ranking ID
         // ID removed from share card display
         
+        // Calculate grid columns based on movie count to fit without scrolling
+        let gridCols = 2;
+        if (movieCount <= 4) gridCols = movieCount;
+        else if (movieCount <= 6) gridCols = 3;
+        else if (movieCount <= 8) gridCols = 4;
+        else if (movieCount <= 10) gridCols = 5;
+        else gridCols = Math.ceil(Math.sqrt(movieCount));
+        
+        shareCardAllMovies.className = `grid gap-2 sm:gap-3 overflow-hidden`;
+        shareCardAllMovies.style.gridTemplateColumns = `repeat(${gridCols}, minmax(0, 1fr))`;
+        
         rankedMovies.forEach((movie, idx) => {
             const rank = idx + 1;
             const movieDiv = document.createElement('div');
-            movieDiv.className = 'text-center';
+            movieDiv.className = 'text-center flex flex-col';
             const posterUrl = movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster';
             movieDiv.innerHTML = `
-                <div class="relative">
-                    <div class="absolute -top-1 -left-1 z-10 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm shadow-lg">
+                <div class="relative flex-shrink-0 mb-1">
+                    <div class="absolute -top-1 -left-1 z-10 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-bold rounded-full w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-xs shadow-lg">
                         ${rank}
                     </div>
                     <img src="${posterUrl}" 
                          alt="${movie.title}"
-                         class="w-full rounded-lg mb-1 sm:mb-2 object-contain"
+                         class="w-full h-auto object-contain rounded"
+                         style="max-height: 120px;"
                          onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
                 </div>
-                <p class="text-xs sm:text-sm text-gray-700 dark:text-gray-300 line-clamp-2 font-medium min-h-[2.5rem]">${movie.title}</p>
+                <p class="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 font-medium leading-tight mt-auto">${movie.title}</p>
             `;
             shareCardAllMovies.appendChild(movieDiv);
         });
