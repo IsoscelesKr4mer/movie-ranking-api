@@ -17,13 +17,17 @@ async function signUp(email, password, displayName) {
     }
     
     try {
+        // Get the current page URL for redirect
+        const redirectUrl = window.location.origin + window.location.pathname;
+        
         const { data, error } = await supabase.auth.signUp({
             email,
             password,
             options: {
                 data: {
                     display_name: displayName
-                }
+                },
+                emailRedirectTo: redirectUrl
             }
         });
         
@@ -53,6 +57,32 @@ async function signIn(email, password) {
         return data;
     } catch (error) {
         console.error('Sign in error:', error);
+        throw error;
+    }
+}
+
+async function signInWithOAuth(provider) {
+    if (!supabase) {
+        showMessage('Supabase not configured. Please add your credentials.', 'error');
+        return null;
+    }
+    
+    try {
+        const redirectUrl = window.location.origin + window.location.pathname;
+        
+        const { data, error } = await supabase.auth.signInWithOAuth({
+            provider: provider, // 'google', 'github', 'facebook', etc.
+            options: {
+                redirectTo: redirectUrl
+            }
+        });
+        
+        if (error) throw error;
+        
+        // OAuth will redirect, so we don't need to return data
+        return data;
+    } catch (error) {
+        console.error('OAuth sign in error:', error);
         throw error;
     }
 }
@@ -452,6 +482,7 @@ window.supabaseService = {
     supabase, // Expose client for direct access if needed
     signUp,
     signIn,
+    signInWithOAuth,
     signOut,
     getCurrentUser,
     getCurrentSession,

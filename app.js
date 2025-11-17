@@ -2027,13 +2027,32 @@ async function handleSignUp() {
     
     try {
         showLoading(true);
-        await window.supabaseService.signUp(email, password, name);
-        showMessage('Account created! Please check your email to verify.', 'success');
+        const result = await window.supabaseService.signUp(email, password, name);
+        
+        // Check if email confirmation is required
+        if (result?.user && !result.session) {
+            showMessage('Account created! Please check your email to verify your account.', 'success');
+        } else {
+            showMessage('Account created! You are now signed in.', 'success');
+            await syncDataFromCloud();
+        }
         closeAuthModal();
     } catch (error) {
         showMessage(error.message || 'Failed to sign up', 'error');
     } finally {
         showLoading(false);
+    }
+}
+
+async function handleSSOSignIn(provider) {
+    try {
+        showLoading(true);
+        await window.supabaseService.signInWithOAuth(provider);
+        // OAuth will redirect, so we don't need to do anything else here
+        // The redirect will bring the user back and initAuth() will handle the session
+    } catch (error) {
+        showLoading(false);
+        showMessage(error.message || `Failed to sign in with ${provider}`, 'error');
     }
 }
 
@@ -2176,6 +2195,7 @@ window.showAuthModal = showAuthModal;
 window.closeAuthModal = closeAuthModal;
 window.handleSignIn = handleSignIn;
 window.handleSignUp = handleSignUp;
+window.handleSSOSignIn = handleSSOSignIn;
 window.handleSignOut = handleSignOut;
 window.showCommunityTemplates = showCommunityTemplates;
 window.closeCommunityTemplatesModal = closeCommunityTemplatesModal;
@@ -2190,6 +2210,29 @@ window.API_BASE = apiUrl;
 // Check for share link parameter
 const urlParams = new URLSearchParams(window.location.search);
 const rankingId = urlParams.get('ranking');
+
+// Handle Supabase auth callback (email verification and OAuth)
+if (window.location.hash) {
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    const error = hashParams.get('error');
+    const errorDescription = hashParams.get('error_description');
+    const accessToken = hashParams.get('access_token');
+    const refreshToken = hashParams.get('refresh_token');
+    
+    if (error) {
+        if (error === 'otp_expired') {
+            showMessage('Email verification link expired. Please sign up again or request a new verification email.', 'error');
+        } else {
+            showMessage(errorDescription || 'Authentication error occurred', 'error');
+        }
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (accessToken) {
+        // OAuth callback - Supabase will handle this automatically
+        // Just clean up the URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
 
 if (rankingId) {
     // Load results from share link
