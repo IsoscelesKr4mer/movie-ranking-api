@@ -1,147 +1,356 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Ranking App</title>
-    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        // Simple animation helper with CSS fallback
+        window.Motion = {
+            animate: function(element, keyframes, options = {}) {
+                const duration = (options.duration || 0.5) * 1000;
+                const delay = (options.delay || 0) * 1000;
+                const easing = options.easing || 'ease-out';
+                
+                setTimeout(() => {
+                    element.style.transition = `all ${duration}ms ${easing}`;
+                    
+                    if (keyframes.opacity) {
+                        element.style.opacity = keyframes.opacity[keyframes.opacity.length - 1];
+                    }
+                    if (keyframes.scale) {
+                        const finalScale = keyframes.scale[keyframes.scale.length - 1];
+                        element.style.transform = `scale(${finalScale})`;
+                    }
+                    if (keyframes.y !== undefined) {
+                        const finalY = keyframes.y[keyframes.y.length - 1];
+                        element.style.transform = `translateY(${finalY}px)`;
+                    }
+                    if (keyframes.rotate) {
+                        const finalRotate = keyframes.rotate[keyframes.rotate.length - 1];
+                        element.style.transform = (element.style.transform || '') + ` rotate(${finalRotate}deg)`;
+                    }
+                }, delay);
+            }
+        };
+    </script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0a0a0f',
+                            surface: '#151520',
+                            card: '#1a1a2e',
+                            border: '#2a2a3e',
+                        }
+                    },
+                    backdropBlur: {
+                        xs: '2px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+        }
+        
+        /* Glassmorphism effect */
+        .glass {
+            background: rgba(26, 26, 46, 0.6);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .glass-hover:hover {
+            background: rgba(26, 26, 46, 0.8);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-4px);
+        }
+        
+        /* Neumorphic shadows */
+        .neumorphic {
+            box-shadow: 
+                8px 8px 16px rgba(0, 0, 0, 0.4),
+                -8px -8px 16px rgba(255, 255, 255, 0.02);
+        }
+        
+        .neumorphic-inset {
+            box-shadow: 
+                inset 4px 4px 8px rgba(0, 0, 0, 0.4),
+                inset -4px -4px 8px rgba(255, 255, 255, 0.02);
+        }
+        
+        /* Masonry grid */
+        .masonry-grid {
+            column-count: 1;
+            column-gap: 1rem;
+        }
+        
+        @media (min-width: 640px) {
+            .masonry-grid {
+                column-count: 2;
+            }
+        }
+        
+        @media (min-width: 768px) {
+            .masonry-grid {
+                column-count: 3;
+            }
+        }
+        
+        @media (min-width: 1024px) {
+            .masonry-grid {
+                column-count: 4;
+            }
+        }
+        
+        @media (min-width: 1280px) {
+            .masonry-grid {
+                column-count: 5;
+            }
+        }
+        
+        .masonry-item {
+            break-inside: avoid;
+            margin-bottom: 1rem;
+        }
+        
+        /* Smooth transitions */
+        .transition-smooth {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Slide in animation for messages */
+        @keyframes slide-in {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .animate-slide-in {
+            animation: slide-in 0.3s ease-out;
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #0a0a0f;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #2a2a3e;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3a3a4e;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>🎬 Movie Ranking App</h1>
-            <p>Rank your favorite movies using binary comparisons</p>
+<body class="text-gray-100">
+    <div class="min-h-screen pb-12">
+        <!-- Header -->
+        <header class="glass border-b border-white/10 sticky top-0 z-50 backdrop-blur-xl">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <h1 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
+                    🎬 Movie Ranker
+                </h1>
+                <p class="text-gray-400 mt-2 text-sm sm:text-base">Rank your favorite movies using binary comparisons</p>
+            </div>
         </header>
 
-        <!-- Configuration Section -->
-        <section id="config-section" class="section">
-            <h2>Setup</h2>
-            <div class="config-form">
-                <div class="form-group">
-                    <label for="api-url">API URL:</label>
-                    <input type="text" id="api-url" value="http://localhost:8000" placeholder="https://your-api-url.com">
-                </div>
-                <div class="form-group">
-                    <label for="load-type">Load By:</label>
-                    <select id="load-type">
-                        <option value="category">Category (Recommended)</option>
-                        <option value="year">Year</option>
-                    </select>
-                </div>
-                <div class="form-group" id="category-group">
-                    <label for="movie-category">Category:</label>
-                    <select id="movie-category">
-                        <option value="">Loading categories...</option>
-                    </select>
-                </div>
-                <div class="form-group hidden" id="year-group">
-                    <label for="movie-year">Year:</label>
-                    <input type="number" id="movie-year" value="2024" min="1900" max="2030">
-                </div>
-                <div class="form-group">
-                    <label for="max-movies">Max Movies:</label>
-                    <input type="number" id="max-movies" value="100" min="1" max="200">
-                </div>
-                <button id="create-session-btn" class="btn btn-primary">Create Session & Load Movies</button>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Setup Section -->
+            <section id="config-section" class="glass rounded-2xl p-6 sm:p-8 mb-8 neumorphic">
+                <h2 class="text-2xl font-semibold mb-6 text-white">Setup</h2>
                 
-                <div class="divider">OR</div>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label for="load-type" class="block text-sm font-medium text-gray-300 mb-2">Load By:</label>
+                            <select id="load-type" class="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                                <option value="category">Category (Recommended)</option>
+                                <option value="year">Year</option>
+                            </select>
+                        </div>
+                        <div id="category-group">
+                            <label for="movie-category" class="block text-sm font-medium text-gray-300 mb-2">Category:</label>
+                            <select id="movie-category" class="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                                <option value="">Loading categories...</option>
+                            </select>
+                        </div>
+                        <div id="year-group" class="hidden">
+                            <label for="movie-year" class="block text-sm font-medium text-gray-300 mb-2">Year:</label>
+                            <input type="number" id="movie-year" value="2024" min="1900" max="2030" class="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                        </div>
+                        <div>
+                            <label for="max-movies" class="block text-sm font-medium text-gray-300 mb-2">Max Movies:</label>
+                            <input type="number" id="max-movies" value="100" min="1" max="200" class="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                        </div>
+                    </div>
+                    
+                    <button id="create-session-btn" class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-semibold rounded-lg hover:from-purple-700 hover:to-pink-700 transition-smooth neumorphic">
+                        Create Session & Load Movies
+                    </button>
+                    
+                    <div class="relative my-6">
+                        <div class="absolute inset-0 flex items-center">
+                            <div class="w-full border-t border-white/10"></div>
+                        </div>
+                        <div class="relative flex justify-center text-sm">
+                            <span class="px-4 bg-dark-card text-gray-400">OR</span>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <label for="letterboxd-url" class="block text-sm font-medium text-gray-300 mb-2">Import Letterboxd List:</label>
+                        <input type="text" id="letterboxd-url" placeholder="https://letterboxd.com/.../share/..." class="w-full px-4 py-3 bg-dark-surface border border-white/10 rounded-lg text-white mb-3 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                        <button id="import-letterboxd-btn" class="w-full sm:w-auto px-6 py-3 bg-dark-surface border border-white/10 text-white font-semibold rounded-lg hover:bg-dark-card transition-smooth neumorphic">
+                            Parse & Import Letterboxd List
+                        </button>
+                        <p class="text-xs text-gray-400 mt-2">Public lists only. Any share link works.</p>
+                        <div id="lb-import-status" class="mt-2 text-sm text-gray-300"></div>
+                    </div>
+                </div>
                 
-                <div class="form-group">
-                    <label for="letterboxd-url">Import Letterboxd List (URL):</label>
-                    <input type="text" id="letterboxd-url" placeholder="https://letterboxd.com/.../share/..." style="margin-bottom: 10px; width: 100%; padding: 8px;">
-                    <button id="import-letterboxd-btn" class="btn btn-secondary">Parse & Import Letterboxd List</button>
-                    <small style="display: block; margin-top: 5px; color: #666;">
-                        Public lists only. Any share link works. We'll match titles via TMDb and keep list order.
-                    </small>
-                    <div id="lb-import-status" style="margin-top:8px; color:#555;"></div>
+                <div id="session-info" class="hidden mt-6 p-4 glass rounded-lg border border-white/10">
+                    <p class="text-sm"><strong class="text-gray-300">Session ID:</strong> <span id="session-id" class="text-purple-400"></span></p>
+                    <p class="text-sm mt-2"><strong class="text-gray-300">Status:</strong> <span id="session-status" class="text-gray-300">Loading...</span></p>
                 </div>
-            </div>
-            <div id="session-info" class="session-info hidden">
-                <p><strong>Session ID:</strong> <span id="session-id"></span></p>
-                <p><strong>Status:</strong> <span id="session-status">Loading...</span></p>
-            </div>
-        </section>
+            </section>
 
-        <!-- Selection Section -->
-        <section id="selection-section" class="section hidden">
-            <h2>Select Movies You've Seen</h2>
-            <p class="selection-info">Click on the movies you've watched. Selected movies will be highlighted.</p>
-            <div id="selection-controls" class="controls">
-                <button id="select-all-btn" class="btn btn-info">Select All</button>
-                <button id="deselect-all-btn" class="btn btn-secondary">Deselect All</button>
-                <button id="confirm-selection-btn" class="btn btn-success">Start Ranking with Selected (<span id="selected-count">0</span>)</button>
-            </div>
-            <div id="movies-selection-grid" class="movies-grid"></div>
-        </section>
-
-        <!-- Ranking Section -->
-        <section id="ranking-section" class="section hidden">
-            <h2>Ranking</h2>
-            <div id="ranking-controls" class="controls">
-                <button id="start-ranking-btn" class="btn btn-success">Start Ranking</button>
-                <button id="get-status-btn" class="btn btn-info">Check Status</button>
-                <button id="get-results-btn" class="btn btn-warning">View Results</button>
-                <button id="reset-btn" class="btn btn-secondary">Reset</button>
-            </div>
-
-            <!-- Current Comparison -->
-            <div id="comparison-container" class="comparison-container hidden">
-                <div class="comparison-header">
-                    <h3>Which movie do you prefer?</h3>
-                    <p id="comparison-progress"></p>
-                </div>
-                <div class="movies-comparison">
-                    <div class="movie-card" id="left-movie">
-                        <div class="movie-poster">
-                            <img id="left-poster" src="" alt="Movie poster">
-                        </div>
-                        <div class="movie-info">
-                            <h4 id="left-title"></h4>
-                            <p id="left-year"></p>
-                            <p id="left-rating"></p>
-                            <p class="movie-overview" id="left-overview"></p>
-                        </div>
-                        <button class="btn btn-choice" data-choice="left">Choose This 🎬</button>
-                    </div>
-
-                    <div class="vs-divider">
-                        <span>VS</span>
-                    </div>
-
-                    <div class="movie-card" id="right-movie">
-                        <div class="movie-poster">
-                            <img id="right-poster" src="" alt="Movie poster">
-                        </div>
-                        <div class="movie-info">
-                            <h4 id="right-title"></h4>
-                            <p id="right-year"></p>
-                            <p id="right-rating"></p>
-                            <p class="movie-overview" id="right-overview"></p>
-                        </div>
-                        <button class="btn btn-choice" data-choice="right">Choose This 🎬</button>
+            <!-- Selection Section -->
+            <section id="selection-section" class="hidden mb-8">
+                <div class="glass rounded-2xl p-6 sm:p-8 neumorphic mb-6">
+                    <h2 class="text-2xl font-semibold mb-2 text-white">Select Movies You've Seen</h2>
+                    <p class="text-gray-400 text-sm mb-6">Click on the movies you've watched. Selected movies will be highlighted.</p>
+                    
+                    <div class="flex flex-wrap gap-3 mb-6">
+                        <button id="select-all-btn" class="px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-600/30 transition-smooth text-sm font-medium">
+                            Select All
+                        </button>
+                        <button id="deselect-all-btn" class="px-4 py-2 bg-gray-600/20 border border-gray-500/30 text-gray-300 rounded-lg hover:bg-gray-600/30 transition-smooth text-sm font-medium">
+                            Deselect All
+                        </button>
+                        <button id="confirm-selection-btn" class="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-smooth text-sm font-medium neumorphic">
+                            Start Ranking with Selected (<span id="selected-count">0</span>)
+                        </button>
                     </div>
                 </div>
-                <div class="skip-container">
-                    <button class="btn btn-skip" data-choice="skip">Skip (Haven't seen both)</button>
+                
+                <div id="movies-selection-grid" class="masonry-grid"></div>
+            </section>
+
+            <!-- Ranking Section -->
+            <section id="ranking-section" class="hidden mb-8">
+                <div class="glass rounded-2xl p-6 sm:p-8 neumorphic mb-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-white">Ranking</h2>
+                    
+                    <div class="flex flex-wrap gap-3 mb-6">
+                        <button id="start-ranking-btn" class="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:from-green-700 hover:to-emerald-700 transition-smooth text-sm font-medium neumorphic">
+                            Start Ranking
+                        </button>
+                        <button id="get-status-btn" class="px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 rounded-lg hover:bg-blue-600/30 transition-smooth text-sm font-medium">
+                            Check Status
+                        </button>
+                        <button id="get-results-btn" class="px-4 py-2 bg-yellow-600/20 border border-yellow-500/30 text-yellow-300 rounded-lg hover:bg-yellow-600/30 transition-smooth text-sm font-medium">
+                            View Results
+                        </button>
+                        <button id="reset-btn" class="px-4 py-2 bg-gray-600/20 border border-gray-500/30 text-gray-300 rounded-lg hover:bg-gray-600/30 transition-smooth text-sm font-medium">
+                            Reset
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <!-- Loading Indicator -->
-            <div id="loading" class="loading hidden">
-                <div class="spinner"></div>
-                <p>Loading...</p>
-            </div>
-        </section>
+                <!-- Current Comparison -->
+                <div id="comparison-container" class="hidden glass rounded-2xl p-6 sm:p-8 neumorphic mb-6">
+                    <div class="text-center mb-8">
+                        <h3 class="text-2xl sm:text-3xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+                            Which movie do you prefer?
+                        </h3>
+                        <p id="comparison-progress" class="text-gray-400 text-sm"></p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-6">
+                        <div id="left-movie" class="glass rounded-xl p-6 border border-white/10 transition-smooth glass-hover">
+                            <div class="mb-4">
+                                <img id="left-poster" src="" alt="Movie poster" class="w-full rounded-lg neumorphic">
+                            </div>
+                            <div class="mb-4">
+                                <h4 id="left-title" class="text-xl font-semibold mb-2 text-white"></h4>
+                                <p id="left-year" class="text-sm text-gray-400 mb-1"></p>
+                                <p id="left-rating" class="text-sm text-yellow-400 mb-3"></p>
+                                <p id="left-overview" class="text-sm text-gray-300 line-clamp-3"></p>
+                            </div>
+                            <button class="btn-choice w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:from-green-700 hover:to-emerald-700 transition-smooth neumorphic" data-choice="left">
+                                Choose This 🎬
+                            </button>
+                        </div>
 
-        <!-- Results Section -->
-        <section id="results-section" class="section hidden">
-            <h2>Final Ranking Results</h2>
-            <div id="results-container"></div>
-        </section>
+                        <div id="right-movie" class="glass rounded-xl p-6 border border-white/10 transition-smooth glass-hover">
+                            <div class="mb-4">
+                                <img id="right-poster" src="" alt="Movie poster" class="w-full rounded-lg neumorphic">
+                            </div>
+                            <div class="mb-4">
+                                <h4 id="right-title" class="text-xl font-semibold mb-2 text-white"></h4>
+                                <p id="right-year" class="text-sm text-gray-400 mb-1"></p>
+                                <p id="right-rating" class="text-sm text-yellow-400 mb-3"></p>
+                                <p id="right-overview" class="text-sm text-gray-300 line-clamp-3"></p>
+                            </div>
+                            <button class="btn-choice w-full px-4 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-semibold rounded-lg hover:from-green-700 hover:to-emerald-700 transition-smooth neumorphic" data-choice="right">
+                                Choose This 🎬
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button class="btn-skip px-6 py-3 bg-yellow-600/20 border border-yellow-500/30 text-yellow-300 rounded-lg hover:bg-yellow-600/30 transition-smooth font-medium" data-choice="skip">
+                            Skip (Haven't seen both)
+                        </button>
+                    </div>
+                </div>
 
-        <!-- Status Messages -->
-        <div id="messages"></div>
+                <!-- Loading Indicator -->
+                <div id="loading" class="hidden text-center py-12">
+                    <div class="inline-block w-12 h-12 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-4"></div>
+                    <p class="text-gray-400">Loading...</p>
+                </div>
+            </section>
+
+            <!-- Results Section -->
+            <section id="results-section" class="hidden">
+                <div class="glass rounded-2xl p-6 sm:p-8 neumorphic mb-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-white">Final Ranking Results</h2>
+                </div>
+                <div id="results-container" class="masonry-grid"></div>
+            </section>
+        </div>
     </div>
+
+    <!-- Status Messages -->
+    <div id="messages" class="fixed top-4 right-4 z-50 space-y-2 max-w-sm"></div>
 
     <script src="parseLetterboxd.js"></script>
     <script src="tmdbService.js"></script>
@@ -149,4 +358,3 @@
     <script src="app.js"></script>
 </body>
 </html>
-

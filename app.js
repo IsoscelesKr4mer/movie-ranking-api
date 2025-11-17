@@ -9,7 +9,6 @@ let selectedMovieIds = new Set();
 let categories = {};
 
 // DOM Elements
-const apiUrlInput = document.getElementById('api-url');
 const loadTypeSelect = document.getElementById('load-type');
 const categoryGroup = document.getElementById('category-group');
 const yearGroup = document.getElementById('year-group');
@@ -40,9 +39,6 @@ const resultsContainer = document.getElementById('results-container');
 const progressSpan = document.getElementById('comparison-progress');
 
 // Event Listeners
-apiUrlInput.addEventListener('change', (e) => {
-    apiUrl = e.target.value.replace(/\/$/, ''); // Remove trailing slash
-});
 
 loadTypeSelect.addEventListener('change', handleLoadTypeChange);
 createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
@@ -67,12 +63,21 @@ document.querySelectorAll('[data-choice]').forEach(btn => {
 function showMessage(text, type = 'info') {
     const messagesDiv = document.getElementById('messages');
     const message = document.createElement('div');
-    message.className = `message ${type}`;
+    
+    const typeStyles = {
+        success: 'bg-green-600/20 border-green-500/30 text-green-300',
+        error: 'bg-red-600/20 border-red-500/30 text-red-300',
+        info: 'bg-blue-600/20 border-blue-500/30 text-blue-300'
+    };
+    
+    message.className = `glass px-4 py-3 rounded-lg border ${typeStyles[type] || typeStyles.info} backdrop-blur-xl animate-slide-in`;
     message.textContent = text;
     messagesDiv.appendChild(message);
 
     setTimeout(() => {
-        message.remove();
+        message.style.opacity = '0';
+        message.style.transform = 'translateX(100%)';
+        setTimeout(() => message.remove(), 300);
     }, 5000);
 }
 
@@ -82,6 +87,21 @@ function showLoading(show = true) {
         comparisonContainer.classList.add('hidden');
     } else {
         loading.classList.add('hidden');
+    }
+}
+
+// Animation helper for ranking badges
+function animateRankBadge(element) {
+    if (window.Motion && window.Motion.animate && element) {
+        // Reset transform first
+        element.style.transform = 'scale(1) rotate(0deg)';
+        // Small delay to ensure reset
+        setTimeout(() => {
+            window.Motion.animate(element, 
+                { scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] },
+                { duration: 0.5, easing: 'ease-out' }
+            );
+        }, 10);
     }
 }
 
@@ -225,32 +245,71 @@ async function importLetterboxdList() {
 function displayMoviesForSelection(movies) {
     moviesSelectionGrid.innerHTML = '';
     
-    movies.forEach(movie => {
+    movies.forEach((movie, index) => {
         const item = document.createElement('div');
-        item.className = 'movie-select-item';
+        item.className = 'masonry-item';
         item.dataset.movieId = movie.id;
         
+        const year = movie.release_date?.substring(0, 4) || 'N/A';
+        const posterUrl = movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
+        
         item.innerHTML = `
-            <div class="checkmark">✓</div>
-            <img src="${movie.poster_url || 'https://via.placeholder.com/150x225?text=No+Poster'}" 
-                 alt="${movie.title}"
-                 onerror="this.src='https://via.placeholder.com/150x225?text=No+Poster'">
-            <h5>${movie.title}</h5>
-            <p style="font-size: 0.8rem; color: #666;">${movie.release_date?.substring(0, 4) || 'N/A'}</p>
+            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover cursor-pointer relative group">
+                <div class="absolute top-2 right-2 z-10 w-8 h-8 bg-green-500/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <div class="absolute top-2 right-2 z-10 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center opacity-100 selected-checkmark hidden">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                </div>
+                <img src="${posterUrl}" 
+                     alt="${movie.title}"
+                     class="w-full h-auto neumorphic"
+                     onerror="this.src='https://via.placeholder.com/300x450?text=No+Poster'">
+                <div class="p-3">
+                    <h5 class="text-sm font-semibold text-white mb-1 line-clamp-2">${movie.title}</h5>
+                    <p class="text-xs text-gray-400">${year}</p>
+                </div>
+            </div>
         `;
         
-        item.addEventListener('click', () => toggleMovieSelection(movie.id, item));
+        const card = item.querySelector('.glass');
+        card.addEventListener('click', () => toggleMovieSelection(movie.id, item));
+        
+        // Add entrance animation
+        if (window.Motion && window.Motion.animate) {
+            item.style.opacity = '0';
+            item.style.transform = 'translateY(20px)';
+            setTimeout(() => {
+                window.Motion.animate(item, 
+                    { opacity: [0, 1], y: [20, 0] },
+                    { duration: 0.4, delay: index * 0.03, easing: 'ease-out' }
+                );
+            }, 10);
+        }
+        
         moviesSelectionGrid.appendChild(item);
     });
 }
 
 function toggleMovieSelection(movieId, element) {
+    const card = element.querySelector('.glass');
+    const checkmark = element.querySelector('.selected-checkmark');
+    
     if (selectedMovieIds.has(movieId)) {
         selectedMovieIds.delete(movieId);
-        element.classList.remove('selected');
+        card.classList.remove('ring-2', 'ring-green-500', 'border-green-500');
+        checkmark?.classList.add('hidden');
+        checkmark?.classList.remove('opacity-100');
     } else {
         selectedMovieIds.add(movieId);
-        element.classList.add('selected');
+        card.classList.add('ring-2', 'ring-green-500', 'border-green-500');
+        checkmark?.classList.remove('hidden');
+        checkmark?.classList.add('opacity-100');
+        animateRankBadge(checkmark);
     }
     updateSelectedCount();
 }
@@ -259,15 +318,25 @@ function selectAllMovies() {
     loadedMovies.forEach(movie => {
         selectedMovieIds.add(movie.id);
         const element = document.querySelector(`[data-movie-id="${movie.id}"]`);
-        if (element) element.classList.add('selected');
+        if (element) {
+            const card = element.querySelector('.glass');
+            const checkmark = element.querySelector('.selected-checkmark');
+            card?.classList.add('ring-2', 'ring-green-500', 'border-green-500');
+            checkmark?.classList.remove('hidden');
+            checkmark?.classList.add('opacity-100');
+        }
     });
     updateSelectedCount();
 }
 
 function deselectAllMovies() {
     selectedMovieIds.clear();
-    document.querySelectorAll('.movie-select-item').forEach(item => {
-        item.classList.remove('selected');
+    document.querySelectorAll('.masonry-item').forEach(item => {
+        const card = item.querySelector('.glass');
+        const checkmark = item.querySelector('.selected-checkmark');
+        card?.classList.remove('ring-2', 'ring-green-500', 'border-green-500');
+        checkmark?.classList.add('hidden');
+        checkmark?.classList.remove('opacity-100');
     });
     updateSelectedCount();
 }
@@ -478,35 +547,77 @@ function displayResults(data) {
 
     rankedMovies.forEach((movie, index) => {
         const item = document.createElement('div');
-        item.className = 'result-item';
-
+        item.className = 'masonry-item';
         const rank = index + 1;
+        const posterUrl = movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
+        const year = movie.release_date?.substring(0, 4) || 'N/A';
+        const rating = movie.vote_average || 'N/A';
+        
         item.innerHTML = `
-            <div class="rank">#${rank}</div>
-            <img src="${movie.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster'}" 
-                 alt="${movie.title}">
-            <h4>${movie.title}</h4>
-            <p>⭐ ${movie.vote_average || 'N/A'}</p>
-            <p>${movie.release_date?.substring(0, 4) || 'N/A'}</p>
+            <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover relative">
+                <div class="absolute top-3 left-3 z-10 rank-badge">
+                    <div class="bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-full w-12 h-12 flex items-center justify-center text-lg shadow-lg neumorphic">
+                        #${rank}
+                    </div>
+                </div>
+                <img src="${posterUrl}" 
+                     alt="${movie.title}"
+                     class="w-full h-auto neumorphic">
+                <div class="p-4">
+                    <h4 class="text-base font-semibold text-white mb-2 line-clamp-2">${movie.title}</h4>
+                    <div class="flex items-center justify-between text-sm">
+                        <span class="text-yellow-400">⭐ ${rating}</span>
+                        <span class="text-gray-400">${year}</span>
+                    </div>
+                </div>
+            </div>
         `;
 
+        const badge = item.querySelector('.rank-badge');
+        if (badge && window.Motion && window.Motion.animate) {
+            item.style.opacity = '0';
+            item.style.transform = 'scale(0.8)';
+            setTimeout(() => {
+                window.Motion.animate(item, 
+                    { opacity: [0, 1], scale: [0.8, 1] },
+                    { duration: 0.5, delay: index * 0.05, easing: 'ease-out' }
+                );
+            }, 10);
+            
+            // Animate badge on hover
+            const card = item.querySelector('.glass');
+            card.addEventListener('mouseenter', () => {
+                animateRankBadge(badge.querySelector('div'));
+            });
+        }
+        
         resultsContainer.appendChild(item);
     });
 
     if (data.unseen_movies && data.unseen_movies.length > 0) {
         const unseenDiv = document.createElement('div');
-        unseenDiv.style.gridColumn = '1 / -1';
-        unseenDiv.style.marginTop = '30px';
+        unseenDiv.className = 'col-span-full mt-8';
         unseenDiv.innerHTML = `
-            <h3>Unseen Movies (${data.unseen_movies.length})</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 15px;">
-                ${data.unseen_movies.map(movie => `
-                    <div class="result-item">
-                        <img src="${movie.poster_url || 'https://via.placeholder.com/200x300?text=No+Poster'}" 
-                             alt="${movie.title}">
-                        <h4>${movie.title}</h4>
-                    </div>
-                `).join('')}
+            <div class="glass rounded-2xl p-6 neumorphic mb-6">
+                <h3 class="text-xl font-semibold text-white mb-4">Unseen Movies (${data.unseen_movies.length})</h3>
+            </div>
+            <div class="masonry-grid">
+                ${data.unseen_movies.map((movie, idx) => {
+                    const item = document.createElement('div');
+                    item.className = 'masonry-item';
+                    item.innerHTML = `
+                        <div class="glass rounded-xl overflow-hidden border border-white/10 transition-smooth glass-hover opacity-60">
+                            <img src="${movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster'}" 
+                                 alt="${movie.title}"
+                                 class="w-full h-auto neumorphic">
+                            <div class="p-3">
+                                <h4 class="text-sm font-semibold text-white line-clamp-2">${movie.title}</h4>
+                            </div>
+                        </div>
+                    `;
+                    resultsContainer.appendChild(item);
+                    return '';
+                }).join('')}
             </div>
         `;
         resultsContainer.appendChild(unseenDiv);
@@ -534,10 +645,6 @@ function reset() {
 // Initialize
 console.log('Initializing Movie Ranking App...');
 console.log('API URL:', apiUrl);
-// Sync the input box with resolved apiUrl
-if (apiUrlInput) {
-    apiUrlInput.value = apiUrl;
-}
 // Expose to other modules that may need it (parser/importer)
 window.API_BASE = apiUrl;
 loadCategories();
