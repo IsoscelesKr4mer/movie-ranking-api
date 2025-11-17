@@ -237,12 +237,21 @@
       }
 
       setStatus('Creating session and importing...');
-      // Send LB poster or TMDb poster if present; preserve order
-      const orderedItems = (parsed.items || []).map((p) => ({
-        title: p.title,
-        year: p.year || null,
-        poster_url: p.tmdbPosterUrl || p.lbPosterUrl || p.posterUrl || p.poster_url || null
-      }));
+      // Send LB poster or TMDb poster if present; sort by release date
+      const orderedItems = (parsed.items || [])
+        .map((p) => ({
+          title: p.title,
+          year: p.year || null,
+          poster_url: p.tmdbPosterUrl || p.lbPosterUrl || p.posterUrl || p.poster_url || null,
+          release_date: p.year && p.year !== 'TBD' ? `${p.year}-01-01` : null
+        }))
+        .sort((a, b) => {
+          if (!a.release_date && !b.release_date) return 0;
+          if (!a.release_date) return 1; // null dates go to end
+          if (!b.release_date) return -1;
+          return a.release_date.localeCompare(b.release_date);
+        })
+        .map(({ release_date, ...rest }) => rest); // Remove release_date before sending to API
 
       const setResp = await apiCall(
         `/api/session/${window.sessionId || (await (async ()=>{ const sd=await apiCall('/api/session/create','POST'); window.sessionId=sd.session_id; document.getElementById('session-id').textContent=window.sessionId; document.getElementById('session-info').classList.remove('hidden'); document.getElementById('session-status').textContent='Session created'; return sd; })()).session_id}/movies/set_bulk`,
@@ -251,8 +260,14 @@
       );
       addMessage(`Imported ${setResp.loaded_count} movies from Letterboxd! Select the ones you want to rank.`, 'success');
 
-      // Show selection grid with final posters
-      window.loadedMovies = setResp.movies || [];
+      // Show selection grid with final posters (sorted by release date)
+      window.loadedMovies = (setResp.movies || []).sort((a, b) => {
+        // Sort by release_date (earliest first, null dates go to end)
+        if (!a.release_date && !b.release_date) return 0;
+        if (!a.release_date) return 1;
+        if (!b.release_date) return -1;
+        return a.release_date.localeCompare(b.release_date);
+      });
       document.getElementById('selection-section').classList.remove('hidden');
       if (typeof displayMoviesForSelection === 'function') {
         displayMoviesForSelection(window.loadedMovies);
