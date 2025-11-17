@@ -622,10 +622,18 @@
                                 </div>
                             </div>
                             <div class="text-center mb-4 sm:mb-6">
-                                <h3 class="text-xl sm:text-2xl font-bold mb-2 text-black dark:text-white">
+                                <h3 class="text-xl sm:text-2xl font-bold mb-3 text-black dark:text-white">
                                     Which movie do you prefer?
                                 </h3>
-                                <p id="comparison-progress" class="text-gray-600 dark:text-gray-400 text-xs sm:text-sm"></p>
+                                <div class="mb-3">
+                                    <div class="flex items-center justify-between mb-1.5">
+                                        <span id="comparison-progress" class="text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium"></span>
+                                        <span id="progress-percentage" class="text-gray-600 dark:text-gray-400 text-xs sm:text-sm font-medium"></span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 sm:h-3 overflow-hidden">
+                                        <div id="progress-bar" class="h-full bg-gradient-to-r from-purple-600 to-pink-600 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4">
