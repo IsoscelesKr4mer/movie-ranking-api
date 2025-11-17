@@ -21,6 +21,7 @@ const importLetterboxdBtn = document.getElementById('import-letterboxd-btn');
 const sessionInfo = document.getElementById('session-info');
 const sessionIdSpan = document.getElementById('session-id');
 const sessionStatusSpan = document.getElementById('session-status');
+const configSection = document.getElementById('config-section');
 const selectionSection = document.getElementById('selection-section');
 const moviesSelectionGrid = document.getElementById('movies-selection-grid');
 const selectAllBtn = document.getElementById('select-all-btn');
