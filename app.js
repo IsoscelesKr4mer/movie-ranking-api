@@ -62,11 +62,43 @@ const shareSection = document.getElementById('share-section');
 const showShareBtn = document.getElementById('show-share-btn');
 const hideShareBtn = document.getElementById('hide-share-btn');
 
+// Custom List DOM Elements
+const customGroup = document.getElementById('custom-group');
+const customListNameInput = document.getElementById('custom-list-name');
+const customCsvInput = document.getElementById('custom-csv-input');
+const sampleDataBtn = document.getElementById('sample-data-btn');
+const clearCustomListBtn = document.getElementById('clear-custom-list-btn');
+const importJsonBtn = document.getElementById('import-json-btn');
+const customItemCounter = document.getElementById('custom-item-counter');
+const customItemsPreview = document.getElementById('custom-items-preview');
+const loadCustomListBtn = document.getElementById('load-custom-list-btn');
+const toggleCustomListsBtn = document.getElementById('toggle-custom-lists-btn');
+const manageCustomListsSection = document.getElementById('manage-custom-lists-section');
+const savedCustomLists = document.getElementById('saved-custom-lists');
+const customListsSearch = document.getElementById('custom-lists-search');
+const exportAllListsBtn = document.getElementById('export-all-lists-btn');
+
+// Past Rankings DOM Elements
+const pastRankingsSection = document.getElementById('past-rankings-section');
+const historySearch = document.getElementById('history-search');
+const pastRankingsList = document.getElementById('past-rankings-list');
+
 // Event Listeners
 
 loadTypeSelect.addEventListener('change', handleLoadTypeChange);
 createSessionBtn.addEventListener('click', createSessionAndLoadMovies);
 importLetterboxdBtn.addEventListener('click', importLetterboxdList);
+
+// Custom List Event Listeners
+if (sampleDataBtn) sampleDataBtn.addEventListener('click', loadSampleData);
+if (clearCustomListBtn) clearCustomListBtn.addEventListener('click', clearCustomListInput);
+if (importJsonBtn) importJsonBtn.addEventListener('click', importFromJSON);
+if (loadCustomListBtn) loadCustomListBtn.addEventListener('click', loadCustomList);
+if (toggleCustomListsBtn) toggleCustomListsBtn.addEventListener('click', toggleCustomLists);
+if (customListsSearch) customListsSearch.addEventListener('input', filterCustomLists);
+if (exportAllListsBtn) exportAllListsBtn.addEventListener('click', exportAllCustomLists);
+if (customCsvInput) customCsvInput.addEventListener('input', updateCustomListPreview);
+if (historySearch) historySearch.addEventListener('input', (e) => loadPastRankings(e.target.value));
 selectAllBtn.addEventListener('click', selectAllMovies);
 deselectAllBtn.addEventListener('click', deselectAllMovies);
 confirmSelectionBtn.addEventListener('click', confirmSelection);
@@ -373,6 +405,9 @@ async function createSessionAndLoadMovies() {
         
         showMessage(`Loaded ${loadData.loaded_count} movies! Select the ones you have seen.`, 'success');
         showLoading(false);
+        
+        // Save session state
+        saveSessionState();
 
     } catch (error) {
         showLoading(false);
@@ -410,6 +445,9 @@ async function importLetterboxdList() {
         updateSelectedCount();
         sessionStatusSpan.textContent = `Imported ${loadedMovies.length} movies`;
         showLoading(false);
+        
+        // Save session state
+        saveSessionState();
 
     } catch (error) {
         showMessage(`Failed to import Letterboxd list: ${error.message}`, 'error');
@@ -575,6 +613,9 @@ async function confirmSelection() {
         
         showLoading(false);
         
+        // Save session state
+        saveSessionState();
+        
         // Auto-start ranking after selection
         setTimeout(() => {
             startRanking();
@@ -609,6 +650,9 @@ async function startRanking() {
             currentComparison = data.comparison;
             displayComparison(data.comparison, data.status);
             // Don't show message - comparison is visible
+            
+            // Save session state
+            saveSessionState();
         } else {
             showMessage('No movies to rank', 'error');
             document.body.classList.remove('overflow-hidden');
@@ -762,6 +806,9 @@ async function makeChoice(choice) {
             currentComparison = data.comparison;
             displayComparison(data.comparison, data.status);
             // Don't show message for every choice to reduce clutter
+            
+            // Save session state after each comparison
+            saveSessionState();
         } else {
             showMessage('Unexpected response from server', 'error');
             document.body.classList.remove('overflow-hidden');
@@ -835,6 +882,9 @@ function displayResults(data) {
     
     // Store for sharing
     window.lastRankedMovies = rankedMovies;
+    
+    // Save to history
+    saveRankingToHistory(rankedMovies, data.unseen_movies || []);
     
     // Update share card with all ranked movies
     const shareCardTopMovies = document.getElementById('share-card-top-movies');
@@ -1440,6 +1490,408 @@ async function generateShareImage() {
     });
 }
 
+// ==================== SESSION PERSISTENCE FUNCTIONS ====================
+
+function saveSessionState() {
+    if (!sessionId) return;
+    
+    try {
+        const state = {
+            sessionId,
+            lastActive: Date.now(),
+            currentStep: getCurrentStep(), // 'loading', 'selecting', 'ranking', 'complete'
+            listName: getCurrentListName(),
+            movies: loadedMovies,
+            selectedMovieIds: Array.from(selectedMovieIds),
+            comparisonsMade,
+            totalMoviesToRank,
+            currentComparison,
+            // Don't save final results here - those go to history
+        };
+        
+        localStorage.setItem('active_ranking_session', JSON.stringify(state));
+    } catch (e) {
+        console.warn('Failed to save session:', e);
+    }
+}
+
+function getCurrentStep() {
+    if (resultsSection && !resultsSection.classList.contains('hidden')) return 'complete';
+    if (comparisonContainer && !comparisonContainer.classList.contains('hidden')) return 'ranking';
+    if (selectionSection && !selectionSection.classList.contains('hidden')) return 'selecting';
+    return 'loading';
+}
+
+function getCurrentListName() {
+    const loadType = loadTypeSelect.value;
+    if (loadType === 'category') {
+        const option = movieCategorySelect.options[movieCategorySelect.selectedIndex];
+        return option ? option.text : 'Category';
+    }
+    if (loadType === 'year') {
+        return `${movieYearInput.value} Movies`;
+    }
+    if (loadType === 'custom') {
+        return customListNameInput ? (customListNameInput.value || 'Custom List') : 'Custom List';
+    }
+    return 'Movies';
+}
+
+function checkForActiveSession() {
+    try {
+        const saved = localStorage.getItem('active_ranking_session');
+        if (!saved) return;
+        
+        const state = JSON.parse(saved);
+        
+        // Check if session is too old (24 hours)
+        const age = Date.now() - state.lastActive;
+        if (age > 24 * 60 * 60 * 1000) {
+            localStorage.removeItem('active_ranking_session');
+            return;
+        }
+        
+        // Show recovery modal
+        showSessionRecoveryModal(state, age);
+    } catch (e) {
+        console.warn('Failed to check for session:', e);
+        localStorage.removeItem('active_ranking_session');
+    }
+}
+
+function showSessionRecoveryModal(state, age) {
+    const minutes = Math.floor(age / 60000);
+    const timeAgo = minutes < 60 ? `${minutes} minutes ago` : `${Math.floor(minutes / 60)} hours ago`;
+    
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm';
+    modal.innerHTML = `
+        <div class="modern-card rounded-2xl p-6 max-w-md">
+            <h3 class="text-xl font-bold text-white mb-3">Continue Ranking?</h3>
+            <p class="text-gray-300 mb-4">
+                You have an in-progress ranking from ${timeAgo}:<br>
+                <strong class="text-white">${state.listName || 'Unknown List'}</strong><br>
+                <span class="text-sm text-gray-400">${state.comparisonsMade || 0} comparisons made</span>
+            </p>
+            <div class="flex gap-3">
+                <button onclick="restoreSession()" class="btn-primary flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-medium rounded-lg hover:from-blue-700 hover:to-cyan-700 transition-all">Continue</button>
+                <button onclick="clearSession()" class="btn-secondary flex-1 px-4 py-2 bg-gray-600/50 text-white font-medium rounded-lg hover:bg-gray-600/70 transition-all">Start Fresh</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    window.sessionRecoveryModal = modal;
+    
+    // Expose restoreSession to global scope
+    window.restoreSession = restoreSession;
+    window.clearSession = clearSession;
+}
+
+function restoreSession() {
+    try {
+        const saved = localStorage.getItem('active_ranking_session');
+        if (!saved) {
+            showMessage('No session found to restore', 'error');
+            return;
+        }
+        
+        const state = JSON.parse(saved);
+        
+        // Restore global state
+        sessionId = state.sessionId;
+        loadedMovies = state.movies || [];
+        comparisonsMade = state.comparisonsMade || 0;
+        totalMoviesToRank = state.totalMoviesToRank || 0;
+        currentComparison = state.currentComparison || null;
+        
+        // Hide config, show appropriate section
+        configSection.classList.add('hidden');
+        
+        if (state.currentStep === 'selecting') {
+            selectionSection.classList.remove('hidden');
+            displayMoviesForSelection(state.movies);
+            
+            // Restore selected movies
+            (state.selectedMovieIds || []).forEach(id => {
+                const element = document.querySelector(`[data-movie-id="${id}"]`);
+                if (element) {
+                    selectedMovieIds.add(id);
+                    const card = element.querySelector('.modern-card');
+                    const checkmark = element.querySelector('.selected-checkmark');
+                    card?.classList.add('ring-2', 'ring-green-500');
+                    checkmark?.classList.remove('hidden');
+                }
+            });
+            updateSelectedCount();
+            
+        } else if (state.currentStep === 'ranking' && state.currentComparison) {
+            comparisonContainer.classList.remove('hidden');
+            displayComparison(state.currentComparison, {});
+            document.body.classList.add('overflow-hidden');
+            
+        } else if (state.currentStep === 'complete') {
+            // Session was complete, just clear it
+            clearSession();
+            return;
+        }
+        
+        showMessage('Session restored! Continue where you left off.', 'success');
+        
+        // Remove modal
+        if (window.sessionRecoveryModal) {
+            window.sessionRecoveryModal.remove();
+            window.sessionRecoveryModal = null;
+        }
+        
+        // Update session info
+        if (sessionIdSpan) sessionIdSpan.textContent = sessionId;
+        if (sessionStatusSpan) sessionStatusSpan.textContent = `Restored session`;
+        if (sessionInfo) sessionInfo.classList.remove('hidden');
+        
+    } catch (e) {
+        console.error('Failed to restore session:', e);
+        showMessage('Failed to restore session', 'error');
+        clearSession();
+    }
+}
+
+function clearSession() {
+    try {
+        localStorage.removeItem('active_ranking_session');
+        if (window.sessionRecoveryModal) {
+            window.sessionRecoveryModal.remove();
+            window.sessionRecoveryModal = null;
+        }
+        showMessage('Starting fresh session', 'info');
+    } catch (e) {
+        console.warn('Failed to clear session:', e);
+    }
+}
+
+function clearSessionManually() {
+    if (confirm('Clear active session? This will reset your current ranking.')) {
+        clearSession();
+        reset();
+    }
+}
+
+function saveRankingToHistory(rankedMovies, unseenMovies = []) {
+    try {
+        const history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        
+        const ranking = {
+            id: Date.now().toString(),
+            timestamp: Date.now(),
+            listName: getCurrentListName(),
+            type: loadTypeSelect.value, // 'category', 'year', 'custom'
+            rankedMovies: rankedMovies,
+            unseenMovies: unseenMovies,
+            totalComparisons: comparisonsMade
+        };
+        
+        history.unshift(ranking); // Add to beginning
+        
+        // Keep only last 50 rankings
+        if (history.length > 50) {
+            history.length = 50;
+        }
+        
+        localStorage.setItem('ranking_history', JSON.stringify(history));
+        
+        // Clear active session
+        localStorage.removeItem('active_ranking_session');
+        
+    } catch (e) {
+        console.warn('Failed to save ranking history:', e);
+    }
+}
+
+// ==================== PAST RANKINGS FUNCTIONS ====================
+
+function togglePastRankings() {
+    if (!pastRankingsSection) return;
+    pastRankingsSection.classList.toggle('hidden');
+    if (!pastRankingsSection.classList.contains('hidden')) {
+        loadPastRankings();
+    }
+}
+
+function loadPastRankings(searchTerm = '') {
+    if (!pastRankingsList) return;
+    
+    try {
+        const history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        
+        const filtered = searchTerm 
+            ? history.filter(r => r.listName.toLowerCase().includes(searchTerm.toLowerCase()))
+            : history;
+        
+        if (filtered.length === 0) {
+            pastRankingsList.innerHTML = '<p class="text-gray-400">No past rankings found</p>';
+            return;
+        }
+        
+        pastRankingsList.innerHTML = filtered.map(ranking => `
+            <div class="glass rounded-lg p-4 mb-3">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-white">${ranking.listName}</h4>
+                        <p class="text-xs text-gray-400">
+                            ${new Date(ranking.timestamp).toLocaleString()} • 
+                            ${ranking.rankedMovies.length} ranked • 
+                            ${ranking.totalComparisons} comparisons
+                        </p>
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        ${ranking.rankedMovies.slice(0, 3).map(m => `
+                            <img src="${m.poster_url}" alt="${m.title}" 
+                                 class="w-8 h-12 object-cover rounded" 
+                                 onerror="this.src='https://via.placeholder.com/50x75'">
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="viewPastRanking('${ranking.id}')" class="btn-minimal text-xs px-3 py-1">View</button>
+                    <button onclick="reRankList('${ranking.id}')" class="btn-minimal text-xs px-3 py-1">Re-rank</button>
+                    <button onclick="deletePastRanking('${ranking.id}')" class="btn-minimal text-xs px-3 py-1 text-red-400">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.warn('Failed to load past rankings:', e);
+        pastRankingsList.innerHTML = '<p class="text-gray-400">Error loading rankings</p>';
+    }
+}
+
+function viewPastRanking(id) {
+    try {
+        const history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        const ranking = history.find(r => r.id === id);
+        
+        if (!ranking) {
+            showMessage('Ranking not found', 'error');
+            return;
+        }
+        
+        // Display results
+        displayResults({
+            ranked_movies: ranking.rankedMovies,
+            unseen_movies: ranking.unseenMovies || []
+        });
+        
+        resultsSection.classList.remove('hidden');
+        configSection.classList.add('hidden');
+        if (pastRankingsSection) pastRankingsSection.classList.add('hidden');
+        
+        // Show comparison count
+        showMessage(`Completed in ${ranking.totalComparisons} comparisons`, 'info');
+    } catch (e) {
+        console.warn('Failed to view past ranking:', e);
+        showMessage('Failed to load ranking', 'error');
+    }
+}
+
+function reRankList(id) {
+    try {
+        const history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        const ranking = history.find(r => r.id === id);
+        
+        if (!ranking) {
+            showMessage('Ranking not found', 'error');
+            return;
+        }
+        
+        // Load same movies and start fresh ranking
+        loadedMovies = ranking.rankedMovies.concat(ranking.unseenMovies || []);
+        
+        configSection.classList.add('hidden');
+        if (pastRankingsSection) pastRankingsSection.classList.add('hidden');
+        selectionSection.classList.remove('hidden');
+        
+        displayMoviesForSelection(loadedMovies);
+        showMessage(`Re-ranking "${ranking.listName}"`, 'info');
+        
+        // Create new session
+        createSessionForReRanking(ranking.listName, loadedMovies);
+    } catch (e) {
+        console.warn('Failed to re-rank list:', e);
+        showMessage('Failed to start re-ranking', 'error');
+    }
+}
+
+async function createSessionForReRanking(listName, items) {
+    try {
+        showLoading(true);
+        
+        // Create session
+        const sessionData = await apiCall('/api/session/create', 'POST');
+        sessionId = sessionData.session_id;
+        sessionIdSpan.textContent = sessionId;
+        sessionInfo.classList.remove('hidden');
+        sessionStatusSpan.textContent = `Loaded ${items.length} items`;
+        
+        showLoading(false);
+        saveSessionState();
+    } catch (error) {
+        showLoading(false);
+        console.error('Failed to create session for re-ranking:', error);
+    }
+}
+
+function deletePastRanking(id) {
+    if (!confirm('Delete this ranking?')) return;
+    
+    try {
+        let history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        history = history.filter(r => r.id !== id);
+        localStorage.setItem('ranking_history', JSON.stringify(history));
+        
+        loadPastRankings();
+        showMessage('Ranking deleted', 'info');
+    } catch (e) {
+        console.warn('Failed to delete past ranking:', e);
+        showMessage('Failed to delete ranking', 'error');
+    }
+}
+
+function exportAllRankings() {
+    try {
+        const history = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        const json = JSON.stringify(history, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            showMessage('All rankings copied to clipboard', 'success');
+        }).catch(() => {
+            showMessage('Failed to copy to clipboard', 'error');
+        });
+    } catch (e) {
+        console.warn('Failed to export all rankings:', e);
+        showMessage('Failed to export rankings', 'error');
+    }
+}
+
+// Add beforeunload warning during active ranking
+window.addEventListener('beforeunload', (e) => {
+    // Only warn if actively ranking (not on results screen)
+    if (sessionId && currentComparison && comparisonContainer && !comparisonContainer.classList.contains('hidden')) {
+        e.preventDefault();
+        e.returnValue = 'You have an active ranking in progress. Are you sure you want to leave?';
+        return e.returnValue;
+    }
+});
+
+// Expose functions to global scope for onclick handlers
+window.loadCustomListById = loadCustomListById;
+window.editCustomList = editCustomList;
+window.exportCustomList = exportCustomList;
+window.deleteCustomList = deleteCustomList;
+window.togglePastRankings = togglePastRankings;
+window.viewPastRanking = viewPastRanking;
+window.reRankList = reRankList;
+window.deletePastRanking = deletePastRanking;
+window.exportAllRankings = exportAllRankings;
+window.clearSessionManually = clearSessionManually;
+
 // Initialize
 console.log('Initializing Movie Ranking App...');
 console.log('API URL:', apiUrl);
@@ -1456,6 +1908,14 @@ if (rankingId) {
 } else {
     // Normal initialization
     loadCategories();
+    
+    // Check for active session on page load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkForActiveSession);
+    } else {
+        checkForActiveSession();
+    }
+    
     showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
 }
 
@@ -1561,14 +2021,398 @@ async function loadCategories(retryCount = 0) {
     }
 }
 
+// ==================== CUSTOM LIST FUNCTIONS ====================
+
+function loadSampleData() {
+    if (!customCsvInput) return;
+    const sampleData = `Wraith,https://via.placeholder.com/300x450?text=Wraith
+Pathfinder,https://via.placeholder.com/300x450?text=Pathfinder
+Bloodhound,https://via.placeholder.com/300x450?text=Bloodhound`;
+    customCsvInput.value = sampleData;
+    updateCustomListPreview();
+}
+
+function clearCustomListInput() {
+    if (customListNameInput) customListNameInput.value = '';
+    if (customCsvInput) customCsvInput.value = '';
+    if (customItemCounter) customItemCounter.textContent = '0 items added';
+    if (customItemsPreview) {
+        customItemsPreview.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>';
+    }
+}
+
+function updateCustomListPreview() {
+    if (!customCsvInput || !customItemsPreview || !customItemCounter) return;
+    
+    const csvInput = customCsvInput.value.trim();
+    if (!csvInput) {
+        customItemsPreview.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>';
+        customItemCounter.textContent = '0 items added';
+        return;
+    }
+    
+    const lines = csvInput.split('\n').filter(line => line.trim());
+    const items = [];
+    
+    lines.forEach((line, index) => {
+        const [name, imageUrl] = line.split(',').map(s => s.trim());
+        if (name) {
+            items.push({
+                id: -(index + 1),
+                title: name,
+                poster_url: imageUrl || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`,
+                release_date: null,
+                vote_average: 0,
+                overview: ""
+            });
+        }
+    });
+    
+    customItemCounter.textContent = `${items.length} items added`;
+    
+    if (items.length === 0) {
+        customItemsPreview.innerHTML = '<p class="text-xs text-gray-500 dark:text-gray-500">Preview will appear here</p>';
+        return;
+    }
+    
+    // Display preview grid
+    customItemsPreview.innerHTML = `
+        <div class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+            ${items.slice(0, 8).map(item => `
+                <div class="text-center">
+                    <img src="${item.poster_url}" alt="${item.title}" 
+                         class="w-full h-auto rounded mb-1 object-cover"
+                         onerror="this.src='https://via.placeholder.com/100x150?text=${encodeURIComponent(item.title)}'">
+                    <p class="text-xs text-gray-300 line-clamp-1">${item.title}</p>
+                </div>
+            `).join('')}
+        </div>
+        ${items.length > 8 ? `<p class="text-xs text-gray-400 mt-2">+${items.length - 8} more items</p>` : ''}
+    `;
+}
+
+function createCustomList() {
+    if (!customListNameInput || !customCsvInput) return null;
+    
+    const listName = customListNameInput.value.trim();
+    const csvInput = customCsvInput.value.trim();
+    
+    if (!listName) {
+        showMessage('Please enter a list name', 'error');
+        return null;
+    }
+    
+    if (!csvInput) {
+        showMessage('Please add some items', 'error');
+        return null;
+    }
+    
+    const lines = csvInput.split('\n').filter(line => line.trim());
+    const items = [];
+    
+    lines.forEach((line, index) => {
+        const [name, imageUrl] = line.split(',').map(s => s.trim());
+        if (name) {
+            items.push({
+                id: -(index + 1),
+                title: name,
+                poster_url: imageUrl || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`,
+                release_date: null,
+                vote_average: 0,
+                overview: ""
+            });
+        }
+    });
+    
+    if (items.length < 2) {
+        showMessage('Need at least 2 items to rank', 'error');
+        return null;
+    }
+    
+    return items;
+}
+
+function saveCustomList(listName, items) {
+    try {
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        
+        const newList = {
+            id: Date.now().toString(),
+            name: listName,
+            created: Date.now(),
+            items: items
+        };
+        
+        lists.push(newList);
+        localStorage.setItem('custom_ranking_lists', JSON.stringify(lists));
+        
+        showMessage(`Saved "${listName}" with ${items.length} items`, 'success');
+        loadCustomListsFromStorage();
+    } catch (e) {
+        console.warn('Failed to save custom list:', e);
+        showMessage('Failed to save list. Storage may be full.', 'error');
+    }
+}
+
+function loadCustomListsFromStorage() {
+    if (!savedCustomLists) return;
+    
+    try {
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        
+        if (lists.length === 0) {
+            savedCustomLists.innerHTML = '<p class="text-gray-400">No saved lists yet</p>';
+            return;
+        }
+        
+        savedCustomLists.innerHTML = lists.map(list => `
+            <div class="glass rounded-lg p-4 mb-3">
+                <div class="flex justify-between items-start mb-2">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-white">${list.name}</h4>
+                        <p class="text-xs text-gray-400">${list.items.length} items • ${new Date(list.created).toLocaleDateString()}</p>
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        ${list.items.slice(0, 3).map(item => `
+                            <img src="${item.poster_url}" alt="${item.title}" 
+                                 class="w-8 h-12 object-cover rounded" 
+                                 onerror="this.src='https://via.placeholder.com/50x75'">
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-3">
+                    <button onclick="loadCustomListById('${list.id}')" class="btn-minimal text-xs px-3 py-1">Load</button>
+                    <button onclick="editCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1">Edit</button>
+                    <button onclick="exportCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1">Export</button>
+                    <button onclick="deleteCustomList('${list.id}')" class="btn-minimal text-xs px-3 py-1 text-red-400">Delete</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        console.warn('Failed to load custom lists:', e);
+        savedCustomLists.innerHTML = '<p class="text-gray-400">Error loading lists</p>';
+    }
+}
+
+function loadCustomList() {
+    if (!customListNameInput) return;
+    
+    const items = createCustomList();
+    if (!items) return;
+    
+    const listName = customListNameInput.value.trim();
+    
+    // Create session first
+    createSessionForCustomList(listName, items);
+}
+
+async function createSessionForCustomList(listName, items) {
+    try {
+        showLoading(true);
+        showMessage('Creating session...', 'info');
+        
+        // Create session
+        const sessionData = await apiCall('/api/session/create', 'POST');
+        sessionId = sessionData.session_id;
+        sessionIdSpan.textContent = sessionId;
+        sessionInfo.classList.remove('hidden');
+        sessionStatusSpan.textContent = 'Session created';
+        
+        // For custom lists, we'll use the existing selection flow
+        // Store items in loadedMovies
+        loadedMovies = items;
+        sessionStatusSpan.textContent = `Loaded ${items.length} custom items`;
+        
+        // Hide setup section and show selection section
+        configSection.classList.add('hidden');
+        if (sessionInfo) sessionInfo.classList.add('hidden');
+        selectionSection.classList.remove('hidden');
+        
+        displayMoviesForSelection(items);
+        selectedMovieIds.clear();
+        updateSelectedCount();
+        
+        // Scroll to selection section
+        setTimeout(() => {
+            selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+        
+        showMessage(`Loaded ${items.length} custom items! Select the ones you want to rank.`, 'success');
+        showLoading(false);
+        
+        // Save session state
+        saveSessionState();
+        
+    } catch (error) {
+        showLoading(false);
+        console.error('Failed to create session for custom list:', error);
+    }
+}
+
+function loadCustomListById(listId) {
+    try {
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        const list = lists.find(l => l.id === listId);
+        
+        if (!list) {
+            showMessage('List not found', 'error');
+            return;
+        }
+        
+        // Use existing movie loading flow
+        createSessionForCustomList(list.name, list.items);
+        
+    } catch (e) {
+        console.warn('Failed to load custom list:', e);
+        showMessage('Failed to load list', 'error');
+    }
+}
+
+function editCustomList(listId) {
+    try {
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        const list = lists.find(l => l.id === listId);
+        
+        if (!list) {
+            showMessage('List not found', 'error');
+            return;
+        }
+        
+        // Switch to custom list mode
+        loadTypeSelect.value = 'custom';
+        handleLoadTypeChange();
+        
+        // Populate form
+        if (customListNameInput) customListNameInput.value = list.name;
+        if (customCsvInput) {
+            customCsvInput.value = list.items.map(item => {
+                const url = item.poster_url || '';
+                return `${item.title}${url ? ',' + url : ''}`;
+            }).join('\n');
+        }
+        updateCustomListPreview();
+        
+        showMessage('List loaded for editing', 'info');
+        
+    } catch (e) {
+        console.warn('Failed to edit custom list:', e);
+        showMessage('Failed to load list for editing', 'error');
+    }
+}
+
+function exportCustomList(listId) {
+    try {
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        const list = lists.find(l => l.id === listId);
+        
+        if (!list) return;
+        
+        const json = JSON.stringify(list, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            showMessage('List copied to clipboard as JSON', 'success');
+        }).catch(() => {
+            showMessage('Failed to copy to clipboard', 'error');
+        });
+    } catch (e) {
+        console.warn('Failed to export custom list:', e);
+        showMessage('Failed to export list', 'error');
+    }
+}
+
+function importFromJSON() {
+    const json = prompt('Paste JSON list:');
+    if (!json) return;
+    
+    try {
+        const list = JSON.parse(json);
+        if (!list.name || !list.items || list.items.length < 2) {
+            throw new Error('Invalid format');
+        }
+        
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        list.id = Date.now().toString();
+        list.created = Date.now();
+        lists.push(list);
+        localStorage.setItem('custom_ranking_lists', JSON.stringify(lists));
+        
+        loadCustomListsFromStorage();
+        showMessage('List imported successfully', 'success');
+    } catch (e) {
+        console.warn('Failed to import JSON:', e);
+        showMessage('Invalid JSON format', 'error');
+    }
+}
+
+function deleteCustomList(listId) {
+    if (!confirm('Delete this list?')) return;
+    
+    try {
+        let lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        lists = lists.filter(l => l.id !== listId);
+        localStorage.setItem('custom_ranking_lists', JSON.stringify(lists));
+        
+        loadCustomListsFromStorage();
+        showMessage('List deleted', 'info');
+    } catch (e) {
+        console.warn('Failed to delete custom list:', e);
+        showMessage('Failed to delete list', 'error');
+    }
+}
+
+function toggleCustomLists() {
+    if (!manageCustomListsSection) return;
+    manageCustomListsSection.classList.toggle('hidden');
+    if (!manageCustomListsSection.classList.contains('hidden')) {
+        loadCustomListsFromStorage();
+    }
+}
+
+function filterCustomLists() {
+    if (!customListsSearch || !savedCustomLists) return;
+    
+    const searchTerm = customListsSearch.value.toLowerCase();
+    const listItems = savedCustomLists.querySelectorAll('.glass');
+    
+    listItems.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        if (text.includes(searchTerm)) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function exportAllCustomLists() {
+    try {
+        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+        const json = JSON.stringify(lists, null, 2);
+        navigator.clipboard.writeText(json).then(() => {
+            showMessage('All lists copied to clipboard', 'success');
+        }).catch(() => {
+            showMessage('Failed to copy to clipboard', 'error');
+        });
+    } catch (e) {
+        console.warn('Failed to export all lists:', e);
+        showMessage('Failed to export lists', 'error');
+    }
+}
+
 function handleLoadTypeChange() {
     const loadType = loadTypeSelect.value;
     if (loadType === 'category') {
         categoryGroup.classList.remove('hidden');
         yearGroup.classList.add('hidden');
-    } else {
+        if (customGroup) customGroup.classList.add('hidden');
+    } else if (loadType === 'year') {
         categoryGroup.classList.add('hidden');
         yearGroup.classList.remove('hidden');
+        if (customGroup) customGroup.classList.add('hidden');
+    } else if (loadType === 'custom') {
+        categoryGroup.classList.add('hidden');
+        yearGroup.classList.add('hidden');
+        if (customGroup) customGroup.classList.remove('hidden');
+        loadCustomListsFromStorage(); // Show saved lists
     }
 }
 
