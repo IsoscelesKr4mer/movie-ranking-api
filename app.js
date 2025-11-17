@@ -572,9 +572,9 @@ async function confirmSelection() {
         
         showMessage(`Selected ${data.selected_count} movies! Starting ranking...`, 'success');
         
-        // Hide selection section
+        // Hide selection section and show ranking section
         selectionSection.classList.add('hidden');
-        // Don't show ranking section - it will be hidden when results show
+        rankingSection.classList.remove('hidden');
         
         showLoading(false);
         
@@ -749,8 +749,6 @@ async function makeChoice(choice) {
             comparisonContainer.classList.add('hidden');
             // Re-enable body scroll
             document.body.classList.remove('overflow-hidden');
-            // Hide ranking section when showing results
-            if (rankingSection) rankingSection.classList.add('hidden');
             displayResults(data.results);
             resultsSection.classList.remove('hidden');
             // Scroll to results
@@ -1153,8 +1151,6 @@ async function loadResultsFromShare(shareSessionId) {
             // Set session ID for sharing
             sessionId = shareSessionId;
             
-            // Hide ranking section before showing results
-            if (rankingSection) rankingSection.classList.add('hidden');
             // Display results
             displayResults(data);
             resultsSection.classList.remove('hidden');
