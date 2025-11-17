@@ -2073,16 +2073,8 @@ async function syncDataFromCloud() {
 // ==================== COMMUNITY TEMPLATES ====================
 
 async function showCommunityTemplates() {
-    const modal = document.getElementById('community-templates-modal');
-    if (!modal) return;
-    
-    modal.classList.remove('hidden');
-    await loadCommunityTemplates();
-}
-
-function closeCommunityTemplatesModal() {
-    const modal = document.getElementById('community-templates-modal');
-    if (modal) modal.classList.add('hidden');
+    // Switch to community tab
+    switchNavTab('community');
 }
 
 async function loadCommunityTemplates(searchTerm = '') {
@@ -2095,16 +2087,16 @@ async function loadCommunityTemplates(searchTerm = '') {
         const templates = await window.supabaseService.loadCommunityTemplates(searchTerm);
         
         if (templates.length === 0) {
-            list.innerHTML = '<p class="text-gray-400 text-center py-8">No templates found</p>';
+            list.innerHTML = '<p class="text-gray-400 text-center py-8">No community templates found. Be the first to share one!</p>';
             return;
         }
         
         list.innerHTML = templates.map(template => `
-            <div class="glass rounded-lg p-4">
+            <div class="glass rounded-lg p-4 mb-3">
                 <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
                         <h4 class="font-semibold text-white mb-1">${template.name}</h4>
-                        <p class="text-xs text-gray-400">By ${template.author} • ${template.items.length} items</p>
+                        <p class="text-xs text-gray-400">By ${template.author || 'Unknown'} • ${template.items.length} items</p>
                     </div>
                     <div class="flex gap-1 ml-2">
                         ${template.items.slice(0, 3).map(item => `
@@ -2121,7 +2113,7 @@ async function loadCommunityTemplates(searchTerm = '') {
         `).join('');
     } catch (error) {
         console.error('Failed to load templates:', error);
-        list.innerHTML = '<p class="text-gray-400 text-center py-8">Failed to load templates</p>';
+        list.innerHTML = '<p class="text-gray-400 text-center py-8">Failed to load templates. Please try again later.</p>';
     }
 }
 
@@ -2132,7 +2124,6 @@ async function importCommunityTemplate(templateId) {
         
         if (template) {
             showMessage('Template imported successfully!', 'success');
-            closeCommunityTemplatesModal();
             
             // Load into editor
             customListItems = template.items.map((item, index) => ({
@@ -2144,9 +2135,8 @@ async function importCommunityTemplate(templateId) {
             renderCustomItemsList();
             updateCustomItemCounter();
             
-            // Switch to custom list mode
-            loadTypeSelect.value = 'custom';
-            handleLoadTypeChange();
+            // Switch to My Lists tab
+            switchNavTab('my-lists');
         }
     } catch (error) {
         showMessage(error.message || 'Failed to import template', 'error');
@@ -2177,7 +2167,6 @@ window.handleSignIn = handleSignIn;
 window.handleSignUp = handleSignUp;
 window.handleSignOut = handleSignOut;
 window.showCommunityTemplates = showCommunityTemplates;
-window.closeCommunityTemplatesModal = closeCommunityTemplatesModal;
 window.importCommunityTemplate = importCommunityTemplate;
 
 // Initialize
@@ -2920,20 +2909,54 @@ function handleLoadTypeChange() {
         categoryGroup.classList.add('hidden');
         yearGroup.classList.remove('hidden');
         if (customGroup) customGroup.classList.add('hidden');
-    } else if (loadType === 'custom') {
-        categoryGroup.classList.add('hidden');
-        yearGroup.classList.add('hidden');
-        if (customGroup) customGroup.classList.remove('hidden');
-        loadCustomListsFromStorage(); // Show saved lists
-        // Reset form if empty
-        if (customListItems.length === 0) {
-            renderCustomItemsList();
-            updateCustomItemCounter();
+    }
+}
+
+// Navigation Functions
+function switchNavTab(tab) {
+    // Hide all sections
+    document.querySelectorAll('.section-content').forEach(section => {
+        section.classList.add('hidden');
+    });
+    
+    // Remove active class from all tabs
+    document.querySelectorAll('.nav-tab').forEach(btn => {
+        btn.classList.remove('active', 'border-b-2', 'border-blue-500', 'text-white');
+        btn.classList.add('text-gray-400');
+    });
+    
+    // Show selected section and activate tab
+    if (tab === 'movies') {
+        document.getElementById('movies-section')?.classList.remove('hidden');
+        const navBtn = document.getElementById('nav-movies');
+        if (navBtn) {
+            navBtn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-white');
+            navBtn.classList.remove('text-gray-400');
         }
-        // Add one initial row to bulk uploader
+    } else if (tab === 'my-lists') {
+        document.getElementById('my-lists-section')?.classList.remove('hidden');
+        const navBtn = document.getElementById('nav-my-lists');
+        if (navBtn) {
+            navBtn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-white');
+            navBtn.classList.remove('text-gray-400');
+        }
+        // Load saved lists when opening
+        loadCustomListsFromStorage();
+        // Add initial row if empty
         if (bulkItemsContainer && bulkItemsContainer.children.length === 0) {
             addBulkItemRow();
         }
+    } else if (tab === 'community') {
+        document.getElementById('community-section')?.classList.remove('hidden');
+        const navBtn = document.getElementById('nav-community');
+        if (navBtn) {
+            navBtn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-white');
+            navBtn.classList.remove('text-gray-400');
+        }
+        // Load community templates
+        loadCommunityTemplates();
     }
 }
+
+window.switchNavTab = switchNavTab;
 
