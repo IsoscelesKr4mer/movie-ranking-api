@@ -89,12 +89,21 @@
     document.getElementById('session-info').classList.remove('hidden');
     document.getElementById('session-status').textContent = 'Session created';
 
-    // Build a single ordered list preserving the original ranks using LB-scraped data
-    const orderedItems = (parsed.items || []).map((p) => ({
-      title: p.title,
-      year: p.year || null,
-      poster_url: p.poster_url || p.posterUrl || null
-    }));
+    // Build a single ordered list sorted by release date
+    const orderedItems = (parsed.items || [])
+      .map((p) => ({
+        title: p.title,
+        year: p.year || null,
+        poster_url: p.poster_url || p.posterUrl || null,
+        release_date: p.year && p.year !== 'TBD' ? `${p.year}-01-01` : null
+      }))
+      .sort((a, b) => {
+        if (!a.release_date && !b.release_date) return 0;
+        if (!a.release_date) return 1; // null dates go to end
+        if (!b.release_date) return -1;
+        return a.release_date.localeCompare(b.release_date);
+      })
+      .map(({ release_date, ...rest }) => rest); // Remove release_date before sending to API
 
     const setResp = await apiCall(
       `/api/session/${window.sessionId}/movies/set_bulk`,
@@ -170,6 +179,14 @@
           poster_url: poster,
           _posterSource: p.tmdbPosterUrl ? 'tmdb' : (p.lbPosterUrl ? 'letterboxd' : 'placeholder')
         };
+      });
+
+      // Sort by release date (earliest first, null dates go to end)
+      enriched.sort((a, b) => {
+        if (!a.release_date && !b.release_date) return 0;
+        if (!a.release_date) return 1; // null dates go to end
+        if (!b.release_date) return -1;
+        return a.release_date.localeCompare(b.release_date);
       });
 
       // Display preview with indication of poster source
