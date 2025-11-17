@@ -518,6 +518,10 @@ async function confirmSelection() {
         showLoading(true);
         const movieIdsArray = Array.from(selectedMovieIds);
         
+        // Reset progress tracking
+        totalMoviesToRank = movieIdsArray.length;
+        comparisonsMade = 0;
+        
         const data = await apiCall(
             `/api/session/${sessionId}/movies/select`,
             'POST',
