@@ -1065,8 +1065,61 @@ console.log('Initializing Movie Ranking App...');
 console.log('API URL:', apiUrl);
 // Expose to other modules that may need it (parser/importer)
 window.API_BASE = apiUrl;
-loadCategories();
-showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
+
+// Check for share link parameter
+const urlParams = new URLSearchParams(window.location.search);
+const rankingId = urlParams.get('ranking');
+
+if (rankingId) {
+    // Load results from share link
+    loadResultsFromShare(rankingId);
+} else {
+    // Normal initialization
+    loadCategories();
+    showMessage('Movie Ranking App loaded! Create a session to begin.', 'info');
+}
+
+async function loadResultsFromShare(shareSessionId) {
+    try {
+        showLoading(true);
+        
+        // Hide setup section
+        const configSection = document.getElementById('config-section');
+        if (configSection) {
+            configSection.classList.add('hidden');
+        }
+        
+        // Get results from API
+        const data = await apiCall(`/api/session/${shareSessionId}/ranking/results`, 'GET');
+        
+        if (data.ranked_movies && data.ranked_movies.length > 0) {
+            // Set session ID for sharing
+            sessionId = shareSessionId;
+            
+            // Display results
+            displayResults(data);
+            resultsSection.classList.remove('hidden');
+            
+            // Scroll to results
+            setTimeout(() => {
+                resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+            
+            showMessage('Ranking loaded from share link!', 'success');
+        } else {
+            showMessage('No ranking found for this link. It may have expired.', 'error');
+            loadCategories();
+        }
+        
+        showLoading(false);
+    } catch (error) {
+        showLoading(false);
+        showMessage('Failed to load ranking from share link. It may have expired.', 'error');
+        console.error('Failed to load share link:', error);
+        // Fall back to normal initialization
+        loadCategories();
+    }
+}
 
 async function loadCategories(retryCount = 0) {
     const maxRetries = 3;
