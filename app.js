@@ -89,14 +89,26 @@ if (downloadImageBtn) downloadImageBtn.addEventListener('click', downloadShareIm
 if (showShareBtn) showShareBtn.addEventListener('click', () => {
     if (shareSection) {
         shareSection.classList.remove('hidden');
-        shareSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
     }
 });
+
 if (hideShareBtn) hideShareBtn.addEventListener('click', () => {
     if (shareSection) {
         shareSection.classList.add('hidden');
+        document.body.style.overflow = ''; // Re-enable scrolling
     }
 });
+
+// Close modal when clicking outside
+if (shareSection) {
+    shareSection.addEventListener('click', (e) => {
+        if (e.target === shareSection) {
+            shareSection.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+    });
+}
 
 // Choice buttons
 document.querySelectorAll('[data-choice]').forEach(btn => {
