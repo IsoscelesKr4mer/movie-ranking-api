@@ -471,55 +471,67 @@
 
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Setup Section -->
-            <section id="config-section" class="modern-card rounded-3xl p-6 sm:p-8 mb-8 animate-fade-in-up">
-                <h2 class="text-2xl font-semibold mb-6 text-black dark:text-white">Setup</h2>
+            <section id="config-section" class="modern-card rounded-2xl p-4 sm:p-6 mb-6 animate-fade-in-up max-w-2xl mx-auto">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold text-black dark:text-white">Quick Start</h2>
+                </div>
                 
-                <div class="space-y-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label for="load-type" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Load By:</label>
-                            <select id="load-type" class="w-full px-4 py-3 bg-white dark:bg-dark-surface border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
-                                <option value="category">Category (Recommended)</option>
+                            <label for="load-type" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Load By</label>
+                            <select id="load-type" class="w-full px-3 py-2 text-sm bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                                <option value="category">Category</option>
                                 <option value="year">Year</option>
                             </select>
                         </div>
                         <div id="category-group">
-                            <label for="movie-category" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Category:</label>
-                            <select id="movie-category" class="w-full px-4 py-3 bg-white dark:bg-dark-surface border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
-                                <option value="">Loading categories...</option>
+                            <label for="movie-category" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Category</label>
+                            <select id="movie-category" class="w-full px-3 py-2 text-sm bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
+                                <option value="">Loading...</option>
                             </select>
                         </div>
                         <div id="year-group" class="hidden">
-                            <label for="movie-year" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Year:</label>
-                            <input type="number" id="movie-year" value="2024" min="1900" max="2030" class="w-full px-4 py-3 bg-white dark:bg-dark-surface border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                            <label for="movie-year" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Year</label>
+                            <input type="number" id="movie-year" value="2024" min="1900" max="2030" class="w-full px-3 py-2 text-sm bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
                         </div>
                         <div>
-                            <label for="max-movies" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Max Movies:</label>
-                            <input type="number" id="max-movies" value="100" min="1" max="200" class="w-full px-4 py-3 bg-white dark:bg-dark-surface border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
+                            <label for="max-movies" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Max Movies</label>
+                            <input type="number" id="max-movies" value="100" min="1" max="200" class="w-full px-3 py-2 text-sm bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all">
                         </div>
                     </div>
                     
-                    <button id="create-session-btn" class="w-full sm:w-auto px-6 py-3 btn-minimal text-gray-900 dark:text-white font-semibold rounded-lg" role="button" aria-label="Create session and load movies">
-                        Create Session & Load Movies
+                    <button id="create-session-btn" class="w-full px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-medium rounded-lg hover:from-purple-700 hover:to-pink-700 transition-all duration-200 text-sm shadow-md hover:shadow-lg transform hover:scale-[1.02] flex items-center justify-center gap-2" role="button" aria-label="Create session and load movies">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        Load Movies
                     </button>
                     
-                    <div class="relative my-6">
+                    <div class="relative my-4">
                         <div class="absolute inset-0 flex items-center">
-                            <div class="w-full border-t border-white/10"></div>
+                            <div class="w-full border-t border-gray-200 dark:border-gray-700"></div>
                         </div>
-                        <div class="relative flex justify-center text-sm">
-                            <span class="px-4 bg-dark-card text-gray-400">OR</span>
+                        <div class="relative flex justify-center text-xs">
+                            <span class="px-3 bg-white dark:bg-black text-gray-500 dark:text-gray-400">or</span>
                         </div>
                     </div>
                     
                     <div>
-                        <label for="letterboxd-url" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Import Letterboxd List:</label>
-                        <input type="text" id="letterboxd-url" placeholder="https://letterboxd.com/.../share/..." class="w-full px-4 py-3 bg-white dark:bg-dark-surface border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white mb-3 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-smooth">
-                        <button id="import-letterboxd-btn" class="w-full sm:w-auto px-6 py-3 btn-minimal text-gray-900 dark:text-white font-semibold rounded-lg" role="button" aria-label="Import Letterboxd list">
-                            Parse & Import Letterboxd List
-                        </button>
-                        <p class="text-xs text-gray-400 mt-2">Public lists only. Any share link works.</p>
-                        <div id="lb-import-status" class="mt-2 text-sm text-gray-300"></div>
+                        <label for="letterboxd-url" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Import from Letterboxd</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="letterboxd-url" placeholder="Paste Letterboxd share link..." class="flex-1 px-3 py-2 text-sm bg-white dark:bg-dark-surface border border-gray-200 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all" />
+                            <button id="import-letterboxd-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-200 text-sm font-medium shadow-md hover:shadow-lg transform hover:scale-[1.02]" role="button" aria-label="Import Letterboxd list">
+                                Import
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1.5">Public lists only</p>
+                        <div id="lb-import-status" class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"></div>
                     </div>
                 </div>
                 
