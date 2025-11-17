@@ -84,18 +84,17 @@ function showMessage(text, type = 'info') {
     const message = document.createElement('div');
     
     const typeStyles = {
-        success: 'bg-green-600/20 border-green-500/30 text-green-300',
-        error: 'bg-red-600/20 border-red-500/30 text-red-300',
-        info: 'bg-blue-600/20 border-blue-500/30 text-blue-300'
+        success: 'bg-green-600/20 dark:bg-green-600/20 border-green-500/30 dark:border-green-500/30 text-green-700 dark:text-green-300',
+        error: 'bg-red-600/20 dark:bg-red-600/20 border-red-500/30 dark:border-red-500/30 text-red-700 dark:text-red-300',
+        info: 'bg-blue-600/20 dark:bg-blue-600/20 border-blue-500/30 dark:border-blue-500/30 text-blue-700 dark:text-blue-300'
     };
     
-    message.className = `glass px-4 py-3 rounded-lg border ${typeStyles[type] || typeStyles.info} backdrop-blur-xl animate-slide-in`;
+    message.className = `glass px-4 py-3 rounded-lg border ${typeStyles[type] || typeStyles.info} backdrop-blur-xl animate-slide-in opacity-100 translate-x-0 transition-all duration-300`;
     message.textContent = text;
     messagesDiv.appendChild(message);
 
     setTimeout(() => {
-        message.style.opacity = '0';
-        message.style.transform = 'translateX(100%)';
+        message.classList.add('opacity-0', 'translate-x-full');
         setTimeout(() => message.remove(), 300);
     }, 5000);
 }
@@ -201,16 +200,17 @@ function showLoading(show = true) {
 
 // Animation helper for ranking badges
 function animateRankBadge(element) {
-    if (window.Motion && window.Motion.animate && element) {
-        // Reset transform first
-        element.style.transform = 'scale(1) rotate(0deg)';
-        // Small delay to ensure reset
+    if (element) {
+        // Use Tailwind classes for animation
+        element.classList.add('transition-all', 'duration-500', 'ease-out');
+        element.classList.add('scale-110', 'rotate-3');
         setTimeout(() => {
-            window.Motion.animate(element, 
-                { scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] },
-                { duration: 0.5, easing: 'ease-out' }
-            );
-        }, 10);
+            element.classList.remove('scale-110', 'rotate-3');
+            element.classList.add('scale-100', 'rotate-0');
+        }, 250);
+        setTimeout(() => {
+            element.classList.remove('scale-100', 'rotate-0', 'transition-all', 'duration-500', 'ease-out');
+        }, 500);
     }
 }
 
@@ -388,17 +388,12 @@ function displayMoviesForSelection(movies) {
         const card = item.querySelector('.glass');
         card.addEventListener('click', () => toggleMovieSelection(movie.id, item));
         
-        // Add entrance animation
-        if (window.Motion && window.Motion.animate) {
-            item.style.opacity = '0';
-            item.style.transform = 'translateY(20px)';
-            setTimeout(() => {
-                window.Motion.animate(item, 
-                    { opacity: [0, 1], y: [20, 0] },
-                    { duration: 0.4, delay: index * 0.03, easing: 'ease-out' }
-                );
-            }, 10);
-        }
+        // Add entrance animation with Tailwind classes
+        item.classList.add('opacity-0', 'translate-y-5', 'transition-all', 'duration-400', 'ease-out');
+        setTimeout(() => {
+            item.classList.remove('opacity-0', 'translate-y-5');
+            item.style.transitionDelay = `${index * 0.03}s`;
+        }, 10);
         
         moviesSelectionGrid.appendChild(item);
     });
@@ -510,7 +505,7 @@ async function startRanking() {
             // Don't show message - comparison is visible
         } else {
             showMessage('No movies to rank', 'error');
-            document.body.style.overflow = '';
+            document.body.classList.remove('overflow-hidden');
             const rankingControls = document.getElementById('ranking-controls');
             if (rankingControls) {
                 rankingControls.classList.remove('hidden');
@@ -549,16 +544,38 @@ function displayComparison(comparison, status) {
     document.getElementById('left-year').textContent = `Year: ${leftMovie.release_date?.substring(0, 4) || 'N/A'}`;
     document.getElementById('left-rating').textContent = `⭐ ${leftMovie.vote_average || 'N/A'}`;
     document.getElementById('left-overview').textContent = leftMovie.overview || 'No overview available';
-    document.getElementById('left-poster').src = leftMovie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
-    document.getElementById('left-poster').alt = leftMovie.title;
+    const leftPoster = document.getElementById('left-poster');
+    const leftPosterUrl = leftMovie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
+    leftPoster.src = leftPosterUrl;
+    leftPoster.alt = leftMovie.title;
+    if (leftPosterUrl.includes('w500')) {
+        leftPoster.srcset = `${leftPosterUrl.replace('w500', 'w300')} 300w, ${leftPosterUrl.replace('w500', 'w500')} 500w, ${leftPosterUrl.replace('w500', 'w780')} 780w`;
+        leftPoster.sizes = '(max-width: 640px) 300px, (max-width: 1024px) 500px, 780px';
+    } else if (leftPosterUrl.includes('image.tmdb.org')) {
+        // Handle other TMDb image sizes
+        const baseUrl = leftPosterUrl.split('/').slice(0, -1).join('/');
+        leftPoster.srcset = `${baseUrl}/w300 300w, ${baseUrl}/w500 500w, ${baseUrl}/w780 780w`;
+        leftPoster.sizes = '(max-width: 640px) 300px, (max-width: 1024px) 500px, 780px';
+    }
 
     // Right movie
     document.getElementById('right-title').textContent = rightMovie.title;
     document.getElementById('right-year').textContent = `Year: ${rightMovie.release_date?.substring(0, 4) || 'N/A'}`;
     document.getElementById('right-rating').textContent = `⭐ ${rightMovie.vote_average || 'N/A'}`;
     document.getElementById('right-overview').textContent = rightMovie.overview || 'No overview available';
-    document.getElementById('right-poster').src = rightMovie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
-    document.getElementById('right-poster').alt = rightMovie.title;
+    const rightPoster = document.getElementById('right-poster');
+    const rightPosterUrl = rightMovie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
+    rightPoster.src = rightPosterUrl;
+    rightPoster.alt = rightMovie.title;
+    if (rightPosterUrl.includes('w500')) {
+        rightPoster.srcset = `${rightPosterUrl.replace('w500', 'w300')} 300w, ${rightPosterUrl.replace('w500', 'w500')} 500w, ${rightPosterUrl.replace('w500', 'w780')} 780w`;
+        rightPoster.sizes = '(max-width: 640px) 300px, (max-width: 1024px) 500px, 780px';
+    } else if (rightPosterUrl.includes('image.tmdb.org')) {
+        // Handle other TMDb image sizes
+        const baseUrl = rightPosterUrl.split('/').slice(0, -1).join('/');
+        rightPoster.srcset = `${baseUrl}/w300 300w, ${baseUrl}/w500 500w, ${baseUrl}/w780 780w`;
+        rightPoster.sizes = '(max-width: 640px) 300px, (max-width: 1024px) 500px, 780px';
+    }
 
     // Progress
     if (status) {
@@ -584,7 +601,7 @@ function displayComparison(comparison, status) {
     comparisonContainer.classList.remove('hidden');
     
     // Prevent body scroll when comparison is active
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('overflow-hidden');
     
     // Scroll to top to show comparison
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -609,7 +626,7 @@ async function makeChoice(choice) {
             showMessage('Ranking complete!', 'success');
             comparisonContainer.classList.add('hidden');
             // Re-enable body scroll
-            document.body.style.overflow = '';
+            document.body.classList.remove('overflow-hidden');
             const rankingControls = document.getElementById('ranking-controls');
             if (rankingControls) {
                 rankingControls.classList.remove('hidden');
@@ -627,7 +644,7 @@ async function makeChoice(choice) {
             // Don't show message for every choice to reduce clutter
         } else {
             showMessage('Unexpected response from server', 'error');
-            document.body.style.overflow = '';
+            document.body.classList.remove('overflow-hidden');
         }
 
         showLoading(false);
@@ -750,12 +767,14 @@ function displayResults(data) {
                 </div>
                 <div class="poster-glow">
                     <img src="${posterUrl}" 
+                         ${posterUrl.includes('w500') ? `srcset="${posterUrl.replace('w500', 'w300')} 300w, ${posterUrl.replace('w500', 'w500')} 500w, ${posterUrl.replace('w500', 'w780')} 780w" sizes="(max-width: 640px) 150px, (max-width: 1024px) 180px, 200px"` : ''}
                          alt="${movie.title} poster"
                          class="w-full h-auto"
-                         loading="lazy">
+                         loading="lazy"
+                         decoding="async">
                 </div>
                 <div class="p-4">
-                    <h4 class="text-base font-semibold text-white mb-2 line-clamp-2">${movie.title}</h4>
+                    <h4 class="text-base font-semibold text-black dark:text-white mb-2 line-clamp-2">${movie.title}</h4>
                     <div class="flex items-center justify-between text-sm">
                         <span class="text-yellow-400">⭐ ${rating}</span>
                         <span class="text-gray-400">${year}</span>
@@ -765,14 +784,12 @@ function displayResults(data) {
         `;
 
         const badge = item.querySelector('.rank-badge');
-        if (badge && window.Motion && window.Motion.animate) {
-            item.style.opacity = '0';
-            item.style.transform = 'scale(0.8)';
+        if (badge) {
+            // Use Tailwind classes for animation
+            item.classList.add('opacity-0', 'scale-90', 'transition-all', 'duration-500', 'ease-out');
             setTimeout(() => {
-                window.Motion.animate(item, 
-                    { opacity: [0, 1], scale: [0.8, 1] },
-                    { duration: 0.5, delay: index * 0.05, easing: 'ease-out' }
-                );
+                item.classList.remove('opacity-0', 'scale-90');
+                item.style.transitionDelay = `${index * 0.05}s`;
             }, 10);
             
             // Animate badge on hover
