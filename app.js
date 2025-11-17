@@ -399,8 +399,10 @@ function displayMoviesForSelection(movies) {
             </div>
         `;
         
-        const card = item.querySelector('.glass');
-        card.addEventListener('click', () => toggleMovieSelection(movie.id, item));
+        const card = item.querySelector('.modern-card');
+        if (card) {
+            card.addEventListener('click', () => toggleMovieSelection(movie.id, item));
+        }
         
         // Add entrance animation with Tailwind classes
         item.classList.add('opacity-0', 'translate-y-5', 'transition-all', 'duration-400', 'ease-out');
@@ -414,7 +416,7 @@ function displayMoviesForSelection(movies) {
 }
 
 function toggleMovieSelection(movieId, element) {
-    const card = element.querySelector('.glass');
+    const card = element.querySelector('.modern-card');
     const checkmark = element.querySelector('.selected-checkmark');
     
     if (selectedMovieIds.has(movieId)) {
@@ -437,7 +439,7 @@ function selectAllMovies() {
         selectedMovieIds.add(movie.id);
         const element = document.querySelector(`[data-movie-id="${movie.id}"]`);
         if (element) {
-            const card = element.querySelector('.glass');
+            const card = element.querySelector('.modern-card');
             const checkmark = element.querySelector('.selected-checkmark');
             card?.classList.add('ring-2', 'ring-green-500', 'border-green-500');
             checkmark?.classList.remove('hidden');
@@ -450,7 +452,7 @@ function selectAllMovies() {
 function deselectAllMovies() {
     selectedMovieIds.clear();
     document.querySelectorAll('.masonry-item').forEach(item => {
-        const card = item.querySelector('.glass');
+        const card = item.querySelector('.modern-card');
         const checkmark = item.querySelector('.selected-checkmark');
         card?.classList.remove('ring-2', 'ring-green-500', 'border-green-500');
         checkmark?.classList.add('hidden');
@@ -807,10 +809,12 @@ function displayResults(data) {
             }, 10);
             
             // Animate badge on hover
-            const card = item.querySelector('.glass');
-            card.addEventListener('mouseenter', () => {
-                animateRankBadge(badge.querySelector('div'));
-            });
+            const card = item.querySelector('.modern-card');
+            if (card) {
+                card.addEventListener('mouseenter', () => {
+                    animateRankBadge(badge.querySelector('div'));
+                });
+            }
         }
         
         resultsContainer.appendChild(item);

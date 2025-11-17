@@ -64,7 +64,7 @@
           </div>
         </div>
       `;
-      const card = item.querySelector('.glass');
+      const card = item.querySelector('.modern-card');
       if (card && typeof toggleMovieSelection === 'function') {
         card.addEventListener('click', () => {
           const movieId = m.id || `nomatch-${idx}`;
@@ -203,7 +203,7 @@
               </div>
             </div>
           `;
-          const card = item.querySelector('.glass');
+          const card = item.querySelector('.modern-card');
           if (card && typeof toggleMovieSelection === 'function') {
             card.addEventListener('click', () => {
               const movieId = m.id || `nomatch-${idx}`;
