@@ -572,9 +572,9 @@ async function confirmSelection() {
         
         showMessage(`Selected ${data.selected_count} movies! Starting ranking...`, 'success');
         
-        // Hide selection section and show ranking section
+        // Hide selection section
         selectionSection.classList.add('hidden');
-        rankingSection.classList.remove('hidden');
+        // Don't show ranking section - it will be hidden when results show
         
         showLoading(false);
         
@@ -838,11 +838,6 @@ function displayResults(data) {
     
     // Store for sharing
     window.lastRankedMovies = rankedMovies;
-    
-    // Update ranking ID in results
-    if (resultsRankingId && sessionId) {
-        resultsRankingId.textContent = sessionId;
-    }
     
     // Update share card with all ranked movies
     if (shareCardAllMovies && rankedMovies.length > 0) {
