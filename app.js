@@ -1077,16 +1077,12 @@ async function loadCategories(retryCount = 0) {
         // Show loading message on first attempt or if retrying
         if (retryCount === 0) {
             movieCategorySelect.innerHTML = '<option value="">Loading categories...</option>';
-            console.log('Loading categories...');
         } else if (retryCount === 1) {
             movieCategorySelect.innerHTML = '<option value="">Waiting for Render to wake up (this may take 50+ seconds)...</option>';
             showMessage('Render free tier is spinning up. This may take 50+ seconds on the first request.', 'info');
-            console.log('Retrying category load - Render may be spinning up...');
         }
         
-        console.log(`Attempting to fetch categories (attempt ${retryCount + 1})...`);
         const data = await apiCall('/api/categories', 'GET', null, 90000); // 90 second timeout for cold start
-        console.log('Categories response:', data);
         
         categories = data.categories || {};
         
@@ -1100,15 +1096,12 @@ async function loadCategories(retryCount = 0) {
             return;
         }
         
-        console.log(`Loading ${Object.keys(categories).length} categories into dropdown`);
         for (const [id, info] of Object.entries(categories)) {
             const option = document.createElement('option');
             option.value = id;
             option.textContent = `${info.name} - ${info.description}`;
             movieCategorySelect.appendChild(option);
         }
-        
-        console.log('Categories loaded successfully!');
         if (retryCount > 0) {
             showMessage('Categories loaded successfully!', 'success');
         }
