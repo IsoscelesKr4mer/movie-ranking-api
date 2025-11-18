@@ -291,7 +291,7 @@ async function loadCustomListsFromCloud() {
             const itemsSignature = JSON.stringify(list.items.map(i => ({ 
                 title: i.title, 
                 id: i.id 
-            })).sort((a, b) => (a.title || '').localeCompare(b.title || ''))));
+            })).sort((a, b) => (a.title || '').localeCompare(b.title || '')));
             const signature = `${list.name}::${itemsSignature}`;
             
             if (!seen.has(signature)) {
