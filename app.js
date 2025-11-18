@@ -2106,7 +2106,7 @@ async function checkIsAdmin() {
     
     // Admin emails - you can modify this list or move it to a config
     const adminEmails = [
-        'isosceleskr4mer@gmail.com', // Add your admin email here
+        'dixonm7@gmail.com',
         // Add more admin emails as needed
     ];
     
