@@ -203,6 +203,33 @@ async function loadRankingsFromCloud() {
     }
 }
 
+async function deleteRankingFromCloud(rankingId) {
+    if (!supabase) {
+        throw new Error('Supabase not configured');
+    }
+    
+    const user = await getCurrentUser();
+    if (!user) {
+        throw new Error('User not logged in');
+    }
+    
+    try {
+        // Delete the ranking
+        const { error } = await supabase
+            .from('rankings')
+            .delete()
+            .eq('id', rankingId)
+            .eq('user_id', user.id); // Ensure user can only delete their own rankings
+        
+        if (error) throw error;
+        
+        return true;
+    } catch (error) {
+        console.error('Delete ranking error:', error);
+        throw error;
+    }
+}
+
 // ==================== CUSTOM LISTS STORAGE ====================
 
 async function saveCustomListToCloud(listName, items, isPublic = false) {
@@ -532,6 +559,7 @@ window.supabaseService = {
     onAuthStateChange,
     saveRankingToCloud,
     loadRankingsFromCloud,
+    deleteRankingFromCloud,
     saveCustomListToCloud,
     loadCustomListsFromCloud,
     deleteCustomListFromCloud,
