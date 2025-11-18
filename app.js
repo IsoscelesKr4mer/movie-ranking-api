@@ -509,7 +509,11 @@ function displayMoviesForSelection(movies) {
         item.dataset.movieId = movie.id;
         
         const year = movie.release_date?.substring(0, 4) || 'N/A';
-        const posterUrl = movie.poster_url || 'https://via.placeholder.com/300x450?text=No+Poster';
+        // Validate poster_url - ensure it has proper protocol or is a data URL
+        let posterUrl = movie.poster_url || '';
+        if (!posterUrl || (!posterUrl.startsWith('http://') && !posterUrl.startsWith('https://') && !posterUrl.startsWith('data:'))) {
+            posterUrl = `https://via.placeholder.com/300x450?text=${encodeURIComponent(movie.title || 'No+Poster')}`;
+        }
         
         item.innerHTML = `
             <div class="modern-card rounded-2xl overflow-hidden transition-all duration-300 hover:scale-105 cursor-pointer relative group shadow-md hover:shadow-xl">
