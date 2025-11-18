@@ -1,37 +1,32 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Ranking App</title>
     <script>
         // GitHub Pages 404 handler for client-side routing
-        // Redirect to index.html while preserving the path
+        // Load index.html content so router can handle the route
+        // This preserves the URL pathname so the router can read it
         (function() {
-            const path = window.location.pathname;
-            const search = window.location.search;
-            const hash = window.location.hash;
-            
-            // Get base path (e.g., /movie-ranking-api)
-            const pathParts = path.split('/').filter(p => p);
-            const basePath = pathParts.length > 0 && pathParts[0] !== 'index.html' 
-                ? '/' + pathParts[0] 
-                : '';
-            
-            // Extract the route (everything after base path)
-            const route = path.replace(basePath, '') || '/';
-            
-            // Redirect to index.html - the router will handle the route
-            const redirectUrl = basePath + '/index.html' + search + hash;
-            
-            // Use replace to avoid adding to history
-            window.location.replace(redirectUrl);
+            // Fetch and load index.html
+            fetch('/movie-ranking-api/index.html')
+                .then(response => response.text())
+                .then(html => {
+                    document.open();
+                    document.write(html);
+                    document.close();
+                })
+                .catch(() => {
+                    // Fallback: redirect to index.html
+                    window.location.replace('/movie-ranking-api/index.html');
+                });
         })();
     </script>
 </head>
 <body>
-    <p style="text-align: center; padding: 2rem; font-family: sans-serif;">
-        Redirecting...
+    <p style="text-align: center; padding: 2rem; font-family: sans-serif; color: #666;">
+        Loading...
     </p>
 </body>
 </html>
