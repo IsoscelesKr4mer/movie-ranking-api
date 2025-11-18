@@ -2557,7 +2557,11 @@ async function saveCustomList(listName, items, isPublic = false) {
         if (window.supabaseService && currentUser) {
             const saved = await window.supabaseService.saveCustomListToCloud(listName, items, isPublic);
             if (saved) {
-                showMessage(`Saved "${listName}" with ${items.length} items to cloud`, 'success');
+                if (isPublic) {
+                    showMessage(`Saved "${listName}" with ${items.length} items and shared as community template!`, 'success');
+                } else {
+                    showMessage(`Saved "${listName}" with ${items.length} items to cloud`, 'success');
+                }
             }
         } else {
             // Fallback to localStorage
@@ -2690,6 +2694,17 @@ function saveCustomListFromForm() {
     const listName = customListNameInput.value.trim();
     const shareAsCommunity = document.getElementById('share-as-community')?.checked || false;
     
+    // Warn if trying to share but not logged in
+    if (shareAsCommunity && (!currentUser || !window.supabaseService)) {
+        showMessage('Please sign in to share lists as community templates', 'error');
+        // Uncheck the checkbox
+        const checkbox = document.getElementById('share-as-community');
+        if (checkbox) checkbox.checked = false;
+        // Save without sharing
+        saveCustomList(listName, items, false);
+        return;
+    }
+    
     // Save the list
     saveCustomList(listName, items, shareAsCommunity);
 }
@@ -2749,10 +2764,21 @@ async function createSessionForCustomList(listName, items) {
     }
 }
 
-function loadCustomListById(listId) {
+async function loadCustomListById(listId) {
     try {
-        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
-        const list = lists.find(l => l.id === listId);
+        let list = null;
+        
+        // Try to load from cloud first if user is logged in
+        if (window.supabaseService && currentUser) {
+            const lists = await window.supabaseService.loadCustomListsFromCloud();
+            list = lists.find(l => l.id === listId || l.id.toString() === listId.toString());
+        }
+        
+        // Fallback to localStorage if not found in cloud
+        if (!list) {
+            const localLists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+            list = localLists.find(l => l.id === listId || l.id.toString() === listId.toString());
+        }
         
         if (!list) {
             showMessage('List not found', 'error');
@@ -2768,10 +2794,21 @@ function loadCustomListById(listId) {
     }
 }
 
-function editCustomList(listId) {
+async function editCustomList(listId) {
     try {
-        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
-        const list = lists.find(l => l.id === listId);
+        let list = null;
+        
+        // Try to load from cloud first if user is logged in
+        if (window.supabaseService && currentUser) {
+            const lists = await window.supabaseService.loadCustomListsFromCloud();
+            list = lists.find(l => l.id === listId || l.id.toString() === listId.toString());
+        }
+        
+        // Fallback to localStorage if not found in cloud
+        if (!list) {
+            const localLists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+            list = localLists.find(l => l.id === listId || l.id.toString() === listId.toString());
+        }
         
         if (!list) {
             showMessage('List not found', 'error');
@@ -2802,12 +2839,26 @@ function editCustomList(listId) {
     }
 }
 
-function exportCustomList(listId) {
+async function exportCustomList(listId) {
     try {
-        const lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
-        const list = lists.find(l => l.id === listId);
+        let list = null;
         
-        if (!list) return;
+        // Try to load from cloud first if user is logged in
+        if (window.supabaseService && currentUser) {
+            const lists = await window.supabaseService.loadCustomListsFromCloud();
+            list = lists.find(l => l.id === listId || l.id.toString() === listId.toString());
+        }
+        
+        // Fallback to localStorage if not found in cloud
+        if (!list) {
+            const localLists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
+            list = localLists.find(l => l.id === listId || l.id.toString() === listId.toString());
+        }
+        
+        if (!list) {
+            showMessage('List not found', 'error');
+            return;
+        }
         
         const json = JSON.stringify(list, null, 2);
         navigator.clipboard.writeText(json).then(() => {
@@ -2845,12 +2896,22 @@ function importFromJSON() {
     }
 }
 
-function deleteCustomList(listId) {
+async function deleteCustomList(listId) {
     if (!confirm('Delete this list?')) return;
     
     try {
+        // Try to delete from cloud first if user is logged in
+        if (window.supabaseService && currentUser) {
+            try {
+                await window.supabaseService.deleteCustomListFromCloud(listId);
+            } catch (cloudError) {
+                console.warn('Failed to delete from cloud, will try local:', cloudError);
+            }
+        }
+        
+        // Also delete from localStorage
         let lists = JSON.parse(localStorage.getItem('custom_ranking_lists') || '[]');
-        lists = lists.filter(l => l.id !== listId);
+        lists = lists.filter(l => l.id !== listId && l.id.toString() !== listId.toString());
         localStorage.setItem('custom_ranking_lists', JSON.stringify(lists));
         
         loadCustomListsFromStorage();

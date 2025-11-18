@@ -222,8 +222,9 @@ async function saveCustomListToCloud(listName, items, isPublic = false) {
         
         if (error) throw error;
         
-        // Also save to localStorage as backup
-        saveCustomListLocal(listName, items);
+        // Don't save to localStorage when saving to cloud to avoid duplicates
+        // The cloud is the source of truth when user is logged in
+        // localStorage will be synced when loading lists
         
         return data;
     } catch (error) {
@@ -261,11 +262,49 @@ async function loadCustomListsFromCloud() {
             isPublic: l.is_public || false
         }));
         
-        // Combine and deduplicate
+        // Combine and deduplicate - prefer cloud lists over local
+        // First, deduplicate by ID
         const allLists = [...cloudLists, ...localLists];
-        const uniqueLists = Array.from(
-            new Map(allLists.map(l => [l.id, l])).values()
-        );
+        const byId = new Map();
+        allLists.forEach(l => {
+            const id = l.id.toString();
+            // Prefer cloud list if both exist (cloud lists come first in array)
+            if (!byId.has(id) || cloudLists.some(cl => cl.id.toString() === id)) {
+                byId.set(id, l);
+            }
+        });
+        
+        // Then, deduplicate by name and items to catch duplicates with different IDs
+        const uniqueLists = [];
+        const seen = new Set();
+        
+        Array.from(byId.values()).forEach(list => {
+            // Create a signature based on name and items
+            const itemsSignature = JSON.stringify(list.items.map(i => ({ 
+                title: i.title, 
+                id: i.id 
+            })).sort((a, b) => (a.title || '').localeCompare(b.title || ''))));
+            const signature = `${list.name}::${itemsSignature}`;
+            
+            if (!seen.has(signature)) {
+                seen.add(signature);
+                uniqueLists.push(list);
+            } else {
+                // If duplicate found, prefer cloud list (has numeric string ID from database)
+                const existing = uniqueLists.find(l => {
+                    const existingSig = `${l.name}::${JSON.stringify(l.items.map(i => ({ 
+                        title: i.title, 
+                        id: i.id 
+                    })).sort((a, b) => (a.title || '').localeCompare(b.title || '')))}`;
+                    return existingSig === signature;
+                });
+                // Replace with cloud list if current is cloud and existing is local
+                if (existing && /^\d+$/.test(list.id) && !/^\d+$/.test(existing.id)) {
+                    const index = uniqueLists.indexOf(existing);
+                    uniqueLists[index] = list;
+                }
+            }
+        });
         
         return uniqueLists;
     } catch (error) {
