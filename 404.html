@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Movie Ranking App</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+    <link rel="shortcut icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@radix-ui/react-slot/dist/index.umd.js"></script>
     <script src="https://unpkg.com/lottie-web@5.12.2/build/player/lottie.min.js"></script>
@@ -1044,10 +1046,25 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="parseLetterboxd.js"></script>
-    <script src="tmdbService.js"></script>
-    <script src="letterboxdImporter.js"></script>
-    <script src="supabaseService.js"></script>
-    <script src="app.js"></script>
+    <script>
+        // Dynamically load scripts with correct base path
+        (function() {
+            const basePath = window.location.pathname.includes('/movie-ranking-api') 
+                ? '/movie-ranking-api' 
+                : '';
+            const scripts = [
+                'parseLetterboxd.js',
+                'tmdbService.js',
+                'letterboxdImporter.js',
+                'supabaseService.js',
+                'app.js'
+            ];
+            scripts.forEach(src => {
+                const script = document.createElement('script');
+                script.src = basePath + '/' + src;
+                document.body.appendChild(script);
+            });
+        })();
+    </script>
 </body>
 </html>
