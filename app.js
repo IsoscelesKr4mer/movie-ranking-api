@@ -1774,6 +1774,164 @@ function saveRankingToHistoryLocal(rankedMovies, unseenMovies = []) {
     }
 }
 
+// ==================== SAVED RANKINGS FUNCTIONS ====================
+
+async function loadSavedRankings(searchTerm = '') {
+    const list = document.getElementById('saved-rankings-list');
+    if (!list) return;
+    
+    try {
+        list.innerHTML = '<p class="text-gray-400 text-center py-8">Loading rankings...</p>';
+        
+        // Try to load from cloud first
+        let rankings = [];
+        if (window.supabaseService && currentUser) {
+            rankings = await window.supabaseService.loadRankingsFromCloud();
+        }
+        
+        // Also load from localStorage
+        const localRankings = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        
+        // Combine and deduplicate (prefer cloud)
+        const allRankings = [...rankings, ...localRankings];
+        const uniqueRankings = [];
+        const seen = new Set();
+        
+        allRankings.forEach(r => {
+            if (!seen.has(r.id)) {
+                seen.add(r.id);
+                uniqueRankings.push(r);
+            }
+        });
+        
+        // Sort by timestamp (newest first)
+        uniqueRankings.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        
+        // Filter by search term
+        const filtered = searchTerm 
+            ? uniqueRankings.filter(r => r.listName?.toLowerCase().includes(searchTerm.toLowerCase()))
+            : uniqueRankings;
+        
+        if (filtered.length === 0) {
+            list.innerHTML = '<p class="text-gray-400 text-center py-8">No saved rankings found. Complete a ranking and click "Save Ranking" to save it here.</p>';
+            return;
+        }
+        
+        list.innerHTML = filtered.map(ranking => `
+            <div class="glass rounded-lg p-4 mb-3">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                        <h4 class="font-semibold text-white mb-1">${ranking.listName || 'Unnamed Ranking'}</h4>
+                        <p class="text-xs text-gray-400">
+                            ${new Date(ranking.timestamp).toLocaleString()} • 
+                            ${ranking.rankedMovies?.length || 0} movies ranked • 
+                            ${ranking.totalComparisons || 0} comparisons
+                        </p>
+                    </div>
+                    <div class="flex gap-1 ml-2">
+                        ${(ranking.rankedMovies || []).slice(0, 3).map(m => `
+                            <img src="${m.poster_url || 'https://via.placeholder.com/50x75'}" alt="${m.title}" 
+                                 class="w-8 h-12 object-cover rounded" 
+                                 onerror="this.src='https://via.placeholder.com/50x75'">
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-2">
+                    <button onclick="viewSavedRanking('${ranking.id}')" class="btn-minimal text-xs px-3 py-1">
+                        View
+                    </button>
+                    <button onclick="deleteSavedRanking('${ranking.id}')" class="btn-minimal text-xs px-3 py-1 text-red-400 hover:text-red-300">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load saved rankings:', error);
+        list.innerHTML = '<p class="text-gray-400 text-center py-8">Failed to load rankings. Please try again.</p>';
+    }
+}
+
+window.viewSavedRanking = function(rankingId) {
+    // Load ranking from storage
+    const localRankings = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+    let ranking = localRankings.find(r => r.id === rankingId);
+    
+    if (!ranking && window.supabaseService && currentUser) {
+        // Try to load from cloud
+        window.supabaseService.loadRankingsFromCloud().then(rankings => {
+            ranking = rankings.find(r => r.id === rankingId);
+            if (ranking) {
+                displaySavedRanking(ranking);
+            } else {
+                showMessage('Ranking not found', 'error');
+            }
+        });
+        return;
+    }
+    
+    if (ranking) {
+        displaySavedRanking(ranking);
+    } else {
+        showMessage('Ranking not found', 'error');
+    }
+};
+
+function displaySavedRanking(ranking) {
+    // Display results similar to displayResults
+    const data = {
+        ranked_movies: ranking.rankedMovies || [],
+        unseen_movies: ranking.unseenMovies || []
+    };
+    
+    displayResults(data);
+    resultsSection.classList.remove('hidden');
+    
+    // Update share card title
+    const shareCardTitle = document.getElementById('share-card-title');
+    if (shareCardTitle) {
+        shareCardTitle.textContent = ranking.listName || 'My Top Movies';
+    }
+    
+    // Navigate to results
+    navigateToRoute('movies');
+    setTimeout(() => {
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+}
+
+window.deleteSavedRanking = async function(rankingId) {
+    if (!confirm('Are you sure you want to delete this ranking?')) {
+        return;
+    }
+    
+    try {
+        // Delete from cloud if logged in
+        if (window.supabaseService && currentUser) {
+            await window.supabaseService.deleteRankingFromCloud(rankingId);
+        }
+        
+        // Delete from localStorage
+        const localRankings = JSON.parse(localStorage.getItem('ranking_history') || '[]');
+        const filtered = localRankings.filter(r => r.id !== rankingId);
+        localStorage.setItem('ranking_history', JSON.stringify(filtered));
+        
+        showMessage('Ranking deleted', 'success');
+        loadSavedRankings();
+    } catch (error) {
+        console.error('Failed to delete ranking:', error);
+        showMessage('Failed to delete ranking', 'error');
+    }
+};
+
+// Rankings search
+const rankingsSearch = document.getElementById('rankings-search');
+if (rankingsSearch) {
+    rankingsSearch.addEventListener('input', (e) => {
+        loadSavedRankings(e.target.value);
+    });
+}
+
 // ==================== PAST RANKINGS FUNCTIONS ====================
 
 function togglePastRankings() {
