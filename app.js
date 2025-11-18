@@ -1989,6 +1989,10 @@ async function handleSignIn() {
     }
     
     try {
+        if (!window.supabaseService) {
+            showMessage('Supabase service not initialized. Please refresh the page.', 'error');
+            return;
+        }
         showLoading(true);
         await window.supabaseService.signIn(email, password);
         showMessage('Signed in successfully!', 'success');
@@ -2083,6 +2087,11 @@ async function loadCommunityTemplates(searchTerm = '') {
     
     try {
         list.innerHTML = '<p class="text-gray-400 text-center py-8">Loading templates...</p>';
+        
+        if (!window.supabaseService) {
+            list.innerHTML = '<p class="text-gray-400 text-center py-8">Supabase service not available. Please refresh the page.</p>';
+            return;
+        }
         
         const templates = await window.supabaseService.loadCommunityTemplates(searchTerm);
         
@@ -2595,7 +2604,7 @@ async function loadCustomListsFromStorage() {
             lists = await window.supabaseService.loadCustomListsFromCloud();
         } else {
             // Fallback to localStorage
-            lists = loadCustomListsFromLocal();
+            lists = window.supabaseService?.loadCustomListsFromLocal() || [];
         }
         
         if (lists.length === 0) {
@@ -2630,7 +2639,7 @@ async function loadCustomListsFromStorage() {
     } catch (e) {
         console.warn('Failed to load custom lists:', e);
         // Fallback to localStorage
-        const localLists = loadCustomListsFromLocal();
+        const localLists = window.supabaseService?.loadCustomListsFromLocal() || [];
         if (localLists.length === 0) {
             savedCustomLists.innerHTML = '<p class="text-gray-400">Error loading lists</p>';
         } else {

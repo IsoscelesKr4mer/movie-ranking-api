@@ -5,7 +5,15 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Initialize Supabase client
 let supabase = null;
 if (SUPABASE_URL && SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    try {
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } else {
+            console.warn('Supabase library not loaded. Please ensure @supabase/supabase-js is loaded before supabaseService.js');
+        }
+    } catch (error) {
+        console.error('Failed to initialize Supabase client:', error);
+    }
 }
 
 // ==================== AUTHENTICATION ====================
@@ -491,7 +499,7 @@ function deleteCustomListLocal(listId) {
     }
 }
 
-// Expose functions globally
+// Expose functions globally - always define even if Supabase isn't loaded
 window.supabaseService = {
     supabase, // Expose client for direct access if needed
     signUp,
@@ -506,6 +514,17 @@ window.supabaseService = {
     loadCustomListsFromCloud,
     deleteCustomListFromCloud,
     loadCommunityTemplates,
-    importCommunityTemplate
+    importCommunityTemplate,
+    loadCustomListsFromLocal // Expose local function for fallback
 };
+
+// If Supabase library loads later, try to initialize
+if (!supabase && window.supabase && typeof window.supabase.createClient === 'function') {
+    try {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.supabaseService.supabase = supabase;
+    } catch (error) {
+        console.error('Failed to initialize Supabase client on delayed load:', error);
+    }
+}
 
