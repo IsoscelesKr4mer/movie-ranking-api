@@ -2990,6 +2990,33 @@ function handleLoadTypeChange() {
 // Navigation Functions
 // ==================== URL ROUTING ====================
 
+// Get base path (for GitHub Pages subdirectory support)
+function getBasePath() {
+    // Get the pathname and extract the base path
+    // For example: /movie-ranking-api/ -> /movie-ranking-api
+    const pathname = window.location.pathname;
+    // Remove trailing slash and extract base path
+    const pathParts = pathname.split('/').filter(p => p);
+    
+    // Route names that should not be considered as base paths
+    const routeNames = ['movies', 'lists', 'community'];
+    
+    // If we're in a subdirectory (like /movie-ranking-api/), use it as base
+    // Check if first part is not a route name
+    if (pathParts.length > 0 && !routeNames.includes(pathParts[0])) {
+        return '/' + pathParts[0];
+    }
+    
+    // Also check if we're at the root with a subdirectory
+    // If pathname starts with something that's not a route, it's the base
+    const firstSegment = pathParts[0];
+    if (firstSegment && !routeNames.includes(firstSegment)) {
+        return '/' + firstSegment;
+    }
+    
+    return '';
+}
+
 // Route configuration
 const routes = {
     '/': 'movies',
@@ -3001,25 +3028,28 @@ const routes = {
 // Get current route from URL
 function getCurrentRoute() {
     const path = window.location.pathname;
-    return routes[path] || routes['/'];
+    const basePath = getBasePath();
+    // Remove base path from pathname for matching
+    const relativePath = basePath ? path.replace(basePath, '') || '/' : path;
+    return routes[relativePath] || routes['/'];
 }
 
 // Navigate to a route
 function navigateToRoute(route, updateHistory = true) {
+    const basePath = getBasePath();
+    
     // Prefer specific paths over root path
     // For 'movies', prefer '/movies' over '/'
     let path = null;
     if (route === 'movies') {
-        path = '/movies';
+        path = basePath + '/movies';
     } else {
-        path = Object.keys(routes).find(key => routes[key] === route && key !== '/');
+        const routePath = Object.keys(routes).find(key => routes[key] === route && key !== '/');
         // Fallback to root if no specific path found
-        if (!path) {
-            path = Object.keys(routes).find(key => routes[key] === route);
-        }
+        path = routePath ? (basePath + routePath) : (basePath + '/');
     }
     
-    if (path && updateHistory) {
+    if (updateHistory) {
         window.history.pushState({ route }, '', path);
     }
     switchNavTab(route, false);
@@ -3105,13 +3135,24 @@ window.navigateToRoute = navigateToRoute;
 
 // Handle navigation link clicks and initialize router
 function setupRouter() {
-    // Prevent default navigation and use our router
+    const basePath = getBasePath();
+    
+    // Update navigation links to use base path
     document.querySelectorAll('.nav-tab').forEach(link => {
+        const href = link.getAttribute('href');
+        if (href && href.startsWith('/')) {
+            // Update href to include base path
+            link.setAttribute('href', basePath + href);
+        }
+        
+        // Prevent default navigation and use our router
         link.addEventListener('click', (e) => {
             e.preventDefault();
-            const href = link.getAttribute('href');
-            if (href) {
-                const route = routes[href] || routes['/'];
+            const linkHref = link.getAttribute('href');
+            if (linkHref) {
+                // Extract route from href (remove base path)
+                const relativePath = basePath ? linkHref.replace(basePath, '') : linkHref;
+                const route = routes[relativePath] || routes['/'];
                 navigateToRoute(route);
             }
         });
