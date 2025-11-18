@@ -136,6 +136,8 @@ if (resetBtn) resetBtn.addEventListener('click', reset);
 if (backToHomeBtn) backToHomeBtn.addEventListener('click', goBackToHome);
 if (backToHomeFromResultsBtn) backToHomeFromResultsBtn.addEventListener('click', goBackToHome);
 if (backFromSelectionBtn) backFromSelectionBtn.addEventListener('click', goBackToHome);
+const saveRankingBtn = document.getElementById('save-ranking-btn');
+if (saveRankingBtn) saveRankingBtn.addEventListener('click', saveCurrentRanking);
 if (shareTwitterBtn) shareTwitterBtn.addEventListener('click', shareToTwitter);
 if (shareFacebookBtn) shareFacebookBtn.addEventListener('click', shareToFacebook);
 if (shareEmailBtn) shareEmailBtn.addEventListener('click', shareViaEmail);
@@ -912,9 +914,14 @@ function displayResults(data) {
     
     // Store for sharing
     window.lastRankedMovies = rankedMovies;
+    window.lastRankingData = data;
     
-    // Save to history
-    saveRankingToHistory(rankedMovies, data.unseen_movies || []);
+    // Update share card title with list/category name
+    const shareCardTitle = document.getElementById('share-card-title');
+    if (shareCardTitle) {
+        const listName = getCurrentListName();
+        shareCardTitle.textContent = listName || 'My Top Movies';
+    }
     
     // Update share card with all ranked movies
     const shareCardTopMovies = document.getElementById('share-card-top-movies');
@@ -1704,6 +1711,19 @@ function clearSessionManually() {
         clearSession();
         reset();
     }
+}
+
+async function saveCurrentRanking() {
+    if (!window.lastRankingData) {
+        showMessage('No ranking data to save', 'error');
+        return;
+    }
+    
+    const rankedMovies = window.lastRankingData.ranked_movies || [];
+    const unseenMovies = window.lastRankingData.unseen_movies || [];
+    
+    await saveRankingToHistory(rankedMovies, unseenMovies);
+    showMessage('Ranking saved successfully!', 'success');
 }
 
 async function saveRankingToHistory(rankedMovies, unseenMovies = []) {
@@ -3118,6 +3138,7 @@ const routes = {
     '/': 'movies',
     '/movies': 'movies',
     '/lists': 'my-lists',
+    '/rankings': 'rankings',
     '/community': 'community'
 };
 
@@ -3219,6 +3240,16 @@ function switchNavTab(tab, updateUrl = true) {
         if (createForm) {
             createForm.classList.add('hidden');
         }
+    } else if (tab === 'rankings') {
+        document.getElementById('rankings-section')?.classList.remove('hidden');
+        const navBtn = document.getElementById('nav-rankings');
+        if (navBtn) {
+            navBtn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-white');
+            navBtn.classList.remove('text-gray-400');
+        }
+        // Load saved rankings
+        loadSavedRankings();
+        if (updateUrl) navigateToRoute('rankings');
     } else if (tab === 'community') {
         document.getElementById('community-section')?.classList.remove('hidden');
         const navBtn = document.getElementById('nav-community');
