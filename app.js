@@ -3146,9 +3146,22 @@ async function editCustomList(listId) {
             return;
         }
         
-        // Switch to custom list mode
-        loadTypeSelect.value = 'custom';
-        handleLoadTypeChange();
+        // Navigate to My Lists section
+        switchNavTab('my-lists', true);
+        
+        // Show the create list form
+        const createForm = document.getElementById('create-list-form');
+        if (createForm) {
+            createForm.classList.remove('hidden');
+            // Update toggle button text
+            const toggleBtn = document.getElementById('toggle-create-list-btn');
+            if (toggleBtn) {
+                toggleBtn.innerHTML = `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                   </svg>
+                   Cancel`;
+            }
+        }
         
         // Populate form
         if (customListNameInput) customListNameInput.value = list.name;
@@ -3161,6 +3174,13 @@ async function editCustomList(listId) {
         
         renderCustomItemsList();
         updateCustomItemCounter();
+        
+        // Scroll to form after a brief delay to ensure it's visible
+        setTimeout(() => {
+            if (createForm) {
+                createForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }, 100);
         
         showMessage('List loaded for editing', 'info');
         
