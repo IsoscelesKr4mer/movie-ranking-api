@@ -2330,11 +2330,15 @@ async function loadCommunityTemplates(searchTerm = '') {
                         <p class="text-xs text-gray-400">By ${template.author || 'Unknown'} • ${template.items.length} items</p>
                     </div>
                     <div class="flex gap-1 ml-2">
-                        ${template.items.slice(0, 3).map(item => `
-                            <img src="${item.poster_url}" alt="${item.title}" 
+                        ${template.items.slice(0, 3).map(item => {
+                            let posterUrl = item.poster_url || '';
+                            if (!posterUrl || (!posterUrl.startsWith('http://') && !posterUrl.startsWith('https://') && !posterUrl.startsWith('data:'))) {
+                                posterUrl = `https://via.placeholder.com/50x75?text=${encodeURIComponent(item.title || 'No+Image')}`;
+                            }
+                            return `<img src="${posterUrl}" alt="${item.title || 'Item'}" 
                                  class="w-8 h-12 object-cover rounded" 
-                                 onerror="this.src='https://via.placeholder.com/50x75'">
-                        `).join('')}
+                                 onerror="this.src='https://via.placeholder.com/50x75'">`;
+                        }).join('')}
                     </div>
                 </div>
                 <div class="flex gap-2 mt-2">
