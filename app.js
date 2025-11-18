@@ -369,9 +369,9 @@ async function createSessionAndLoadMovies() {
         // Create session
         const sessionData = await apiCall('/api/session/create', 'POST');
         sessionId = sessionData.session_id;
-        sessionIdSpan.textContent = sessionId;
-        sessionInfo.classList.remove('hidden');
-        sessionStatusSpan.textContent = 'Session created';
+        if (sessionIdSpan) sessionIdSpan.textContent = sessionId;
+        if (sessionInfo) sessionInfo.classList.remove('hidden');
+        if (sessionStatusSpan) sessionStatusSpan.textContent = 'Session created';
 
         showMessage('Session created! Loading movies...', 'success');
 
@@ -405,7 +405,7 @@ async function createSessionAndLoadMovies() {
         );
 
         loadedMovies = loadData.movies || [];
-        sessionStatusSpan.textContent = `Loaded ${loadData.loaded_count} movies`;
+        if (sessionStatusSpan) sessionStatusSpan.textContent = `Loaded ${loadData.loaded_count} movies`;
         
         if (!loadedMovies || loadedMovies.length === 0) {
             showMessage('No movies were loaded. Please try a different category or year.', 'error');
@@ -414,9 +414,9 @@ async function createSessionAndLoadMovies() {
         }
         
         // Hide setup section and show selection section
-        configSection.classList.add('hidden');
+        if (configSection) configSection.classList.add('hidden');
         if (sessionInfo) sessionInfo.classList.add('hidden');
-        selectionSection.classList.remove('hidden');
+        if (selectionSection) selectionSection.classList.remove('hidden');
         
         // Ensure movies grid is visible
         if (!moviesSelectionGrid) {
@@ -431,9 +431,11 @@ async function createSessionAndLoadMovies() {
         updateSelectedCount();
         
         // Scroll to selection section
-        setTimeout(() => {
-            selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 100);
+        if (selectionSection) {
+            setTimeout(() => {
+                selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
         
         showMessage(`Loaded ${loadData.loaded_count} movies! Select the ones you have seen.`, 'success');
         showLoading(false);
