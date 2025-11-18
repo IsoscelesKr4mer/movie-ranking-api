@@ -3006,7 +3006,19 @@ function getCurrentRoute() {
 
 // Navigate to a route
 function navigateToRoute(route, updateHistory = true) {
-    const path = Object.keys(routes).find(key => routes[key] === route);
+    // Prefer specific paths over root path
+    // For 'movies', prefer '/movies' over '/'
+    let path = null;
+    if (route === 'movies') {
+        path = '/movies';
+    } else {
+        path = Object.keys(routes).find(key => routes[key] === route && key !== '/');
+        // Fallback to root if no specific path found
+        if (!path) {
+            path = Object.keys(routes).find(key => routes[key] === route);
+        }
+    }
+    
     if (path && updateHistory) {
         window.history.pushState({ route }, '', path);
     }
