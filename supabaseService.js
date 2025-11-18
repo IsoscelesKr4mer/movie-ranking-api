@@ -528,10 +528,23 @@ function saveCustomListLocal(listName, items) {
             items: items
         };
         lists.push(newList);
-        localStorage.setItem('custom_ranking_lists', JSON.stringify(lists));
+        
+        // Check size before saving
+        const dataToSave = JSON.stringify(lists);
+        const sizeInMB = new Blob([dataToSave]).size / (1024 * 1024);
+        
+        if (sizeInMB > 4) {
+            console.warn(`Warning: Custom lists data is ${sizeInMB.toFixed(2)}MB. localStorage limit is typically 5-10MB.`);
+        }
+        
+        localStorage.setItem('custom_ranking_lists', dataToSave);
         return newList;
     } catch (e) {
         console.warn('Failed to save custom list locally:', e);
+        // Check if it's a quota error
+        if (e.name === 'QuotaExceededError' || e.message?.includes('quota')) {
+            console.error('localStorage quota exceeded. Consider using smaller images or fewer items per list.');
+        }
         return null;
     }
 }
