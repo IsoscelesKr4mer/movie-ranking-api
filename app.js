@@ -2764,10 +2764,23 @@ async function createSessionForCustomList(listName, items) {
         sessionInfo.classList.remove('hidden');
         sessionStatusSpan.textContent = 'Session created';
         
-        // For custom lists, we'll use the existing selection flow
-        // Store items in loadedMovies
-        loadedMovies = items;
-        sessionStatusSpan.textContent = `Loaded ${items.length} custom items`;
+        // Set movies in session using bulk endpoint
+        // Format items for the API (extract title and year)
+        const itemsForApi = items.map(item => ({
+            title: item.title || '',
+            year: item.release_date ? item.release_date.substring(0, 4) : (item.year || null)
+        }));
+        
+        showMessage('Setting movies in session...', 'info');
+        const setData = await apiCall(
+            `/api/session/${sessionId}/movies/set_bulk`,
+            'POST',
+            { items: itemsForApi }
+        );
+        
+        // Store items in loadedMovies (use the returned movies from API if available)
+        loadedMovies = setData.movies || items;
+        sessionStatusSpan.textContent = `Loaded ${loadedMovies.length} custom items`;
         
         // Hide setup section and show selection section
         if (configSection) configSection.classList.add('hidden');
@@ -2778,7 +2791,7 @@ async function createSessionForCustomList(listName, items) {
         if (sessionInfo) sessionInfo.classList.add('hidden');
         if (selectionSection) selectionSection.classList.remove('hidden');
         
-        displayMoviesForSelection(items);
+        displayMoviesForSelection(loadedMovies);
         selectedMovieIds.clear();
         updateSelectedCount();
         
@@ -2787,15 +2800,20 @@ async function createSessionForCustomList(listName, items) {
             selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 100);
         
-        showMessage(`Loaded ${items.length} custom items! Select the ones you want to rank.`, 'success');
+        showMessage(`Loaded ${loadedMovies.length} custom items! Select the ones you want to rank.`, 'success');
         showLoading(false);
         
-        // Save session state
-        saveSessionState();
+        // Don't save session state if it causes quota errors - it's optional
+        try {
+            saveSessionState();
+        } catch (e) {
+            console.warn('Failed to save session state (quota exceeded):', e);
+        }
         
     } catch (error) {
         showLoading(false);
         console.error('Failed to create session for custom list:', error);
+        showMessage(error.message || 'Failed to load custom list', 'error');
     }
 }
 
