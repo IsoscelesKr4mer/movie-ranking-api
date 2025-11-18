@@ -1080,18 +1080,24 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script>
-        // Set base path for script loading
+        // Dynamically load scripts with correct base path
         (function() {
             const basePath = window.location.pathname.includes('/movie-ranking-api') 
                 ? '/movie-ranking-api' 
                 : '';
-            window.__basePath = basePath;
+            const scripts = [
+                'parseLetterboxd.js',
+                'tmdbService.js',
+                'letterboxdImporter.js',
+                'supabaseService.js',
+                'app.js'
+            ];
+            scripts.forEach(src => {
+                const script = document.createElement('script');
+                script.src = basePath + '/' + src;
+                document.body.appendChild(script);
+            });
         })();
     </script>
-    <script src="./parseLetterboxd.js"></script>
-    <script src="./tmdbService.js"></script>
-    <script src="./letterboxdImporter.js"></script>
-    <script src="./supabaseService.js"></script>
-    <script src="./app.js"></script>
 </body>
 </html>
