@@ -103,6 +103,28 @@ if (clearCustomListBtn) clearCustomListBtn.addEventListener('click', clearCustom
 if (importJsonBtn) importJsonBtn.addEventListener('click', importFromJSON);
 if (saveCustomListBtn) saveCustomListBtn.addEventListener('click', saveCustomListFromForm);
 if (loadCustomListBtn) loadCustomListBtn.addEventListener('click', loadCustomList);
+
+// Toggle create list form
+const toggleCreateListBtn = document.getElementById('toggle-create-list-btn');
+if (toggleCreateListBtn) {
+    toggleCreateListBtn.addEventListener('click', () => {
+        const createForm = document.getElementById('create-list-form');
+        if (createForm) {
+            createForm.classList.toggle('hidden');
+            // Update button text based on visibility
+            const isHidden = createForm.classList.contains('hidden');
+            toggleCreateListBtn.innerHTML = isHidden 
+                ? `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                   </svg>
+                   Create New List`
+                : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                   </svg>
+                   Cancel`;
+        }
+    });
+}
 if (toggleCustomListsBtn) toggleCustomListsBtn.addEventListener('click', toggleCustomLists);
 if (customListsSearch) customListsSearch.addEventListener('input', filterCustomLists);
 if (exportAllListsBtn) exportAllListsBtn.addEventListener('click', exportAllCustomLists);
@@ -3117,6 +3139,12 @@ function switchNavTab(tab, updateUrl = true) {
             addBulkItemRow();
         }
         if (updateUrl) navigateToRoute('my-lists');
+        
+        // Ensure create form is hidden when switching to this tab
+        const createForm = document.getElementById('create-list-form');
+        if (createForm) {
+            createForm.classList.add('hidden');
+        }
     } else if (tab === 'community') {
         document.getElementById('community-section')?.classList.remove('hidden');
         const navBtn = document.getElementById('nav-community');
