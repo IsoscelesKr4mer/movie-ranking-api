@@ -1969,11 +1969,15 @@ function loadPastRankings(searchTerm = '') {
                         </p>
                     </div>
                     <div class="flex gap-1 ml-2">
-                        ${ranking.rankedMovies.slice(0, 3).map(m => `
-                            <img src="${m.poster_url}" alt="${m.title}" 
+                        ${ranking.rankedMovies.slice(0, 3).map(m => {
+                            let posterUrl = m.poster_url || '';
+                            if (!posterUrl || (!posterUrl.startsWith('http://') && !posterUrl.startsWith('https://') && !posterUrl.startsWith('data:'))) {
+                                posterUrl = `https://via.placeholder.com/50x75?text=${encodeURIComponent(m.title || 'No+Image')}`;
+                            }
+                            return `<img src="${posterUrl}" alt="${m.title || 'Item'}" 
                                  class="w-8 h-12 object-cover rounded" 
-                                 onerror="this.src='https://via.placeholder.com/50x75'">
-                        `).join('')}
+                                 onerror="this.src='https://via.placeholder.com/50x75'">`;
+                        }).join('')}
                     </div>
                 </div>
                 <div class="flex gap-2 mt-3">
@@ -2692,7 +2696,12 @@ function addAllBulkItems() {
             return;
         }
         
-        const imageUrl = imageUrlInput?.value.trim() || `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`;
+        let imageUrl = imageUrlInput?.value.trim() || '';
+        
+        // Ensure imageUrl is valid - add protocol if missing, or use placeholder
+        if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://') && !imageUrl.startsWith('data:'))) {
+            imageUrl = `https://via.placeholder.com/300x450?text=${encodeURIComponent(name)}`;
+        }
         
         const item = {
             id: -(customListItems.length + 1),
@@ -2738,14 +2747,21 @@ function renderCustomItemsList() {
         return;
     }
     
-    customItemsList.innerHTML = customListItems.map((item, index) => `
+    customItemsList.innerHTML = customListItems.map((item, index) => {
+        // Ensure poster_url is valid - add protocol if missing, or use placeholder
+        let posterUrl = item.poster_url || '';
+        if (!posterUrl || (!posterUrl.startsWith('http://') && !posterUrl.startsWith('https://') && !posterUrl.startsWith('data:'))) {
+            posterUrl = `https://via.placeholder.com/64x96?text=${encodeURIComponent(item.title || 'No+Image')}`;
+        }
+        const displayUrl = posterUrl.length > 50 ? posterUrl.substring(0, 50) + '...' : posterUrl;
+        return `
         <div class="glass rounded-lg p-3 flex items-center gap-3">
-            <img src="${item.poster_url}" alt="${item.title}" 
+            <img src="${posterUrl}" alt="${item.title || 'Item'}" 
                  class="w-16 h-24 object-cover rounded"
-                 onerror="this.src='https://via.placeholder.com/64x96?text=${encodeURIComponent(item.title)}'">
+                 onerror="this.src='https://via.placeholder.com/64x96?text=${encodeURIComponent(item.title || 'No+Image')}'">
             <div class="flex-1">
-                <h5 class="text-sm font-semibold text-white">${item.title}</h5>
-                <p class="text-xs text-gray-400 truncate">${item.poster_url.length > 50 ? item.poster_url.substring(0, 50) + '...' : item.poster_url}</p>
+                <h5 class="text-sm font-semibold text-white">${item.title || 'Untitled'}</h5>
+                <p class="text-xs text-gray-400 truncate">${displayUrl}</p>
             </div>
             <button onclick="removeCustomItem(${index})" class="px-2 py-1 bg-red-600/20 text-red-400 rounded hover:bg-red-600/30 transition-all text-xs">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2753,7 +2769,8 @@ function renderCustomItemsList() {
                 </svg>
             </button>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function updateCustomItemCounter() {
@@ -2876,11 +2893,18 @@ async function loadCustomListsFromStorage() {
                         <p class="text-xs text-gray-400">${list.items.length} items • ${new Date(list.created).toLocaleDateString()}</p>
                     </div>
                     <div class="flex gap-1 ml-2">
-                        ${list.items.slice(0, 3).map(item => `
-                            <img src="${item.poster_url}" alt="${item.title}" 
-                                 class="w-8 h-12 object-cover rounded" 
-                                 onerror="this.src='https://via.placeholder.com/50x75'">
-                        `).join('')}
+                        ${list.items.slice(0, 3).map(item => {
+                            // Ensure poster_url is valid - add protocol if missing, or use placeholder
+                            let posterUrl = item.poster_url || '';
+                            if (!posterUrl || (!posterUrl.startsWith('http://') && !posterUrl.startsWith('https://') && !posterUrl.startsWith('data:'))) {
+                                posterUrl = `https://via.placeholder.com/50x75?text=${encodeURIComponent(item.title || 'No+Image')}`;
+                            }
+                            return `
+                                <img src="${posterUrl}" alt="${item.title || 'Item'}" 
+                                     class="w-8 h-12 object-cover rounded" 
+                                     onerror="this.src='https://via.placeholder.com/50x75'">
+                            `;
+                        }).join('')}
                     </div>
                 </div>
                 <div class="flex gap-2 mt-3">
