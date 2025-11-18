@@ -387,6 +387,28 @@ async function loadCommunityTemplates(searchTerm = '') {
     }
 }
 
+async function deleteCommunityTemplate(templateId) {
+    if (!supabase) {
+        throw new Error('Supabase not configured');
+    }
+    
+    try {
+        // Delete the community template (admin can delete any public list)
+        const { error } = await supabase
+            .from('custom_lists')
+            .delete()
+            .eq('id', templateId)
+            .eq('is_public', true);
+        
+        if (error) throw error;
+        
+        return true;
+    } catch (error) {
+        console.error('Delete community template error:', error);
+        throw error;
+    }
+}
+
 async function importCommunityTemplate(templateId) {
     if (!supabase) {
         showMessage('Supabase not configured', 'error');
@@ -515,6 +537,7 @@ window.supabaseService = {
     deleteCustomListFromCloud,
     loadCommunityTemplates,
     importCommunityTemplate,
+    deleteCommunityTemplate,
     loadCustomListsFromLocal // Expose local function for fallback
 };
 

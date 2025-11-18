@@ -2098,6 +2098,22 @@ async function syncDataFromCloud() {
 
 // ==================== COMMUNITY TEMPLATES ====================
 
+// Check if current user is an admin
+async function checkIsAdmin() {
+    if (!currentUser || !window.supabaseService) {
+        return false;
+    }
+    
+    // Admin emails - you can modify this list or move it to a config
+    const adminEmails = [
+        'isosceleskr4mer@gmail.com', // Add your admin email here
+        // Add more admin emails as needed
+    ];
+    
+    const userEmail = currentUser.email;
+    return adminEmails.includes(userEmail);
+}
+
 async function showCommunityTemplates() {
     // Switch to community tab
     navigateToRoute('community');
@@ -2122,6 +2138,8 @@ async function loadCommunityTemplates(searchTerm = '') {
             return;
         }
         
+        const isAdmin = await checkIsAdmin();
+        
         list.innerHTML = templates.map(template => `
             <div class="glass rounded-lg p-4 mb-3">
                 <div class="flex items-start justify-between mb-2">
@@ -2137,9 +2155,14 @@ async function loadCommunityTemplates(searchTerm = '') {
                         `).join('')}
                     </div>
                 </div>
-                <button onclick="importCommunityTemplate('${template.id}')" class="btn-minimal text-xs px-3 py-1 mt-2">
-                    Import Template
-                </button>
+                <div class="flex gap-2 mt-2">
+                    <button onclick="importCommunityTemplate('${template.id}')" class="btn-minimal text-xs px-3 py-1">
+                        Import Template
+                    </button>
+                    ${isAdmin ? `<button onclick="deleteCommunityTemplate('${template.id}')" class="btn-minimal text-xs px-3 py-1 text-red-400 hover:text-red-300">
+                        Delete
+                    </button>` : ''}
+                </div>
             </div>
         `).join('');
     } catch (error) {
@@ -2147,6 +2170,39 @@ async function loadCommunityTemplates(searchTerm = '') {
         list.innerHTML = '<p class="text-gray-400 text-center py-8">Failed to load templates. Please try again later.</p>';
     }
 }
+
+async function deleteCommunityTemplate(templateId) {
+    if (!confirm('Are you sure you want to delete this community template? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        if (!window.supabaseService) {
+            showMessage('Supabase service not available', 'error');
+            return;
+        }
+        
+        const isAdmin = await checkIsAdmin();
+        if (!isAdmin) {
+            showMessage('You do not have permission to delete community templates', 'error');
+            return;
+        }
+        
+        showLoading(true);
+        await window.supabaseService.deleteCommunityTemplate(templateId);
+        showMessage('Community template deleted successfully', 'success');
+        
+        // Reload templates
+        await loadCommunityTemplates();
+        showLoading(false);
+    } catch (error) {
+        showLoading(false);
+        console.error('Failed to delete community template:', error);
+        showMessage(error.message || 'Failed to delete template', 'error');
+    }
+}
+
+window.deleteCommunityTemplate = deleteCommunityTemplate;
 
 async function importCommunityTemplate(templateId) {
     try {
