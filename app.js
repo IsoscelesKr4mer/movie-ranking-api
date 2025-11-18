@@ -2667,6 +2667,16 @@ function handleBulkImageFileSelect(e, rowId) {
         return;
     }
     
+    // Warn if file is very large (data URLs will be ~33% larger)
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        if (!confirm(`Warning: This image is ${sizeMB}MB. Large images may cause storage issues.\n\nFor best results, use images under 1MB or compress them first.\n\nContinue anyway?`)) {
+            e.target.value = ''; // Clear the file input
+            return;
+        }
+    }
+    
     const reader = new FileReader();
     reader.onload = (event) => {
         const dataUrl = event.target.result;
@@ -2675,8 +2685,12 @@ function handleBulkImageFileSelect(e, rowId) {
             const urlInput = row.querySelector('.bulk-item-image-url');
             if (urlInput) {
                 urlInput.value = dataUrl;
+                showMessage('Image loaded successfully', 'success');
             }
         }
+    };
+    reader.onerror = () => {
+        showMessage('Failed to read image file', 'error');
     };
     reader.readAsDataURL(file);
 }

@@ -243,6 +243,14 @@ async function saveCustomListToCloud(listName, items, isPublic = false) {
     }
     
     try {
+        // Check approximate size of items (data URLs can be large)
+        const itemsSize = JSON.stringify(items).length;
+        const sizeInMB = itemsSize / (1024 * 1024);
+        
+        if (sizeInMB > 1) {
+            console.warn(`Warning: List items are ${sizeInMB.toFixed(2)}MB. Supabase JSONB limit is typically 1GB, but large data URLs may cause issues.`);
+        }
+        
         const { data, error } = await supabase
             .from('custom_lists')
             .insert({
