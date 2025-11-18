@@ -2748,9 +2748,13 @@ async function createSessionForCustomList(listName, items) {
         sessionStatusSpan.textContent = `Loaded ${items.length} custom items`;
         
         // Hide setup section and show selection section
-        configSection.classList.add('hidden');
+        if (configSection) configSection.classList.add('hidden');
+        // Hide all main sections
+        document.querySelectorAll('.section-content').forEach(section => {
+            section.classList.add('hidden');
+        });
         if (sessionInfo) sessionInfo.classList.add('hidden');
-        selectionSection.classList.remove('hidden');
+        if (selectionSection) selectionSection.classList.remove('hidden');
         
         displayMoviesForSelection(items);
         selectedMovieIds.clear();

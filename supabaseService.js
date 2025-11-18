@@ -360,7 +360,7 @@ async function loadCommunityTemplates(searchTerm = '') {
     try {
         let query = supabase
             .from('custom_lists')
-            .select('*, profiles:user_id(display_name)')
+            .select('*')
             .eq('is_public', true)
             .order('created_at', { ascending: false })
             .limit(50);
@@ -378,7 +378,7 @@ async function loadCommunityTemplates(searchTerm = '') {
             name: t.name,
             items: t.items,
             created: new Date(t.created_at).getTime(),
-            author: t.profiles?.display_name || 'Anonymous',
+            author: 'Anonymous', // TODO: Add user profile lookup if needed
             authorId: t.user_id
         }));
     } catch (error) {
