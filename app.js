@@ -2074,7 +2074,7 @@ async function syncDataFromCloud() {
 
 async function showCommunityTemplates() {
     // Switch to community tab
-    switchNavTab('community');
+    navigateToRoute('community');
 }
 
 async function loadCommunityTemplates(searchTerm = '') {
@@ -2136,7 +2136,7 @@ async function importCommunityTemplate(templateId) {
             updateCustomItemCounter();
             
             // Switch to My Lists tab
-            switchNavTab('my-lists');
+            navigateToRoute('my-lists');
         }
     } catch (error) {
         showMessage(error.message || 'Failed to import template', 'error');
@@ -2975,11 +2975,63 @@ function handleLoadTypeChange() {
 }
 
 // Navigation Functions
-function switchNavTab(tab) {
+// ==================== URL ROUTING ====================
+
+// Route configuration
+const routes = {
+    '/': 'movies',
+    '/movies': 'movies',
+    '/lists': 'my-lists',
+    '/community': 'community'
+};
+
+// Get current route from URL
+function getCurrentRoute() {
+    const path = window.location.pathname;
+    return routes[path] || routes['/'];
+}
+
+// Navigate to a route
+function navigateToRoute(route, updateHistory = true) {
+    const path = Object.keys(routes).find(key => routes[key] === route);
+    if (path && updateHistory) {
+        window.history.pushState({ route }, '', path);
+    }
+    switchNavTab(route, false);
+}
+
+// Initialize router
+function initRouter() {
+    // Prevent duplicate initialization
+    if (window.routerInitialized) return;
+    window.routerInitialized = true;
+    
+    // Handle initial route
+    const initialRoute = getCurrentRoute();
+    switchNavTab(initialRoute, false);
+    
+    // Handle browser back/forward buttons (only add once)
+    window.addEventListener('popstate', (event) => {
+        const route = event.state?.route || getCurrentRoute();
+        switchNavTab(route, false);
+    });
+}
+
+// ==================== NAVIGATION ====================
+
+function switchNavTab(tab, updateUrl = true) {
     // Hide all sections
     document.querySelectorAll('.section-content').forEach(section => {
         section.classList.add('hidden');
     });
+    
+    // Hide other sections that aren't part of main navigation
+    const selectionSection = document.getElementById('selection-section');
+    const comparisonContainer = document.getElementById('comparison-container');
+    const resultsSection = document.getElementById('results-section');
+    if (selectionSection) selectionSection.classList.add('hidden');
+    if (comparisonContainer) comparisonContainer.classList.add('hidden');
+    if (resultsSection) resultsSection.classList.add('hidden');
     
     // Remove active class from all tabs
     document.querySelectorAll('.nav-tab').forEach(btn => {
@@ -2995,6 +3047,7 @@ function switchNavTab(tab) {
             navBtn.classList.add('active', 'border-b-2', 'border-blue-500', 'text-white');
             navBtn.classList.remove('text-gray-400');
         }
+        if (updateUrl) navigateToRoute('movies');
     } else if (tab === 'my-lists') {
         document.getElementById('my-lists-section')?.classList.remove('hidden');
         const navBtn = document.getElementById('nav-my-lists');
@@ -3008,6 +3061,7 @@ function switchNavTab(tab) {
         if (bulkItemsContainer && bulkItemsContainer.children.length === 0) {
             addBulkItemRow();
         }
+        if (updateUrl) navigateToRoute('my-lists');
     } else if (tab === 'community') {
         document.getElementById('community-section')?.classList.remove('hidden');
         const navBtn = document.getElementById('nav-community');
@@ -3017,8 +3071,35 @@ function switchNavTab(tab) {
         }
         // Load community templates
         loadCommunityTemplates();
+        if (updateUrl) navigateToRoute('community');
     }
 }
 
 window.switchNavTab = switchNavTab;
+window.navigateToRoute = navigateToRoute;
+
+// Handle navigation link clicks and initialize router
+function setupRouter() {
+    // Prevent default navigation and use our router
+    document.querySelectorAll('.nav-tab').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const href = link.getAttribute('href');
+            if (href) {
+                const route = routes[href] || routes['/'];
+                navigateToRoute(route);
+            }
+        });
+    });
+    
+    // Initialize router
+    initRouter();
+}
+
+// Initialize router when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupRouter);
+} else {
+    setupRouter();
+}
 
