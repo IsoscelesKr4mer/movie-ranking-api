@@ -3033,14 +3033,14 @@ function loadCustomList() {
 async function createSessionForCustomList(listName, items) {
     try {
         showLoading(true);
-        showMessage('Creating session...', 'info');
+        showMessage('Creating session... (This may take up to 60 seconds if Render is spinning up)', 'info');
         
         // Create session
         const sessionData = await apiCall('/api/session/create', 'POST');
         sessionId = sessionData.session_id;
-        sessionIdSpan.textContent = sessionId;
-        sessionInfo.classList.remove('hidden');
-        sessionStatusSpan.textContent = 'Session created';
+        if (sessionIdSpan) sessionIdSpan.textContent = sessionId;
+        if (sessionInfo) sessionInfo.classList.remove('hidden');
+        if (sessionStatusSpan) sessionStatusSpan.textContent = 'Session created';
         
         // Set movies in session using bulk endpoint
         // Format items for the API (extract title and year)
@@ -3058,7 +3058,7 @@ async function createSessionForCustomList(listName, items) {
         
         // Store items in loadedMovies (use the returned movies from API if available)
         loadedMovies = setData.movies || items;
-        sessionStatusSpan.textContent = `Loaded ${loadedMovies.length} custom items`;
+        if (sessionStatusSpan) sessionStatusSpan.textContent = `Loaded ${loadedMovies.length} custom items`;
         
         // Hide setup section and show selection section
         if (configSection) configSection.classList.add('hidden');
@@ -3074,9 +3074,11 @@ async function createSessionForCustomList(listName, items) {
         updateSelectedCount();
         
         // Scroll to selection section
-        setTimeout(() => {
-            selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 100);
+        if (selectionSection) {
+            setTimeout(() => {
+                selectionSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
+        }
         
         showMessage(`Loaded ${loadedMovies.length} custom items! Select the ones you want to rank.`, 'success');
         showLoading(false);
@@ -3091,7 +3093,8 @@ async function createSessionForCustomList(listName, items) {
     } catch (error) {
         showLoading(false);
         console.error('Failed to create session for custom list:', error);
-        showMessage(error.message || 'Failed to load custom list', 'error');
+        const errorMsg = error.message || 'Failed to load custom list';
+        showMessage(errorMsg + (errorMsg.includes('timeout') ? ' - Render may be spinning up. Please wait and try again.' : ''), 'error');
     }
 }
 
