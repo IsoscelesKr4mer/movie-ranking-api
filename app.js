@@ -3043,10 +3043,11 @@ async function createSessionForCustomList(listName, items) {
         if (sessionStatusSpan) sessionStatusSpan.textContent = 'Session created';
         
         // Set movies in session using bulk endpoint
-        // Format items for the API (extract title and year)
+        // Format items for the API (extract title and year, but preserve poster_url)
         const itemsForApi = items.map(item => ({
             title: item.title || '',
-            year: item.release_date ? item.release_date.substring(0, 4) : (item.year || null)
+            year: item.release_date ? item.release_date.substring(0, 4) : (item.year || null),
+            poster_url: item.poster_url || null  // Preserve poster_url if it exists
         }));
         
         showMessage('Setting movies in session...', 'info');
@@ -3056,8 +3057,42 @@ async function createSessionForCustomList(listName, items) {
             { items: itemsForApi }
         );
         
-        // Store items in loadedMovies (use the returned movies from API if available)
-        loadedMovies = setData.movies || items;
+        // Merge API response with original items to preserve poster_urls
+        // Create a map of original items by title for quick lookup
+        const originalItemsMap = new Map();
+        items.forEach(item => {
+            if (item.title) {
+                originalItemsMap.set(item.title.toLowerCase().trim(), item);
+            }
+        });
+        
+        // Use API movies but preserve poster_url from original items
+        if (setData.movies && setData.movies.length > 0) {
+            loadedMovies = setData.movies.map(apiMovie => {
+                const originalItem = originalItemsMap.get((apiMovie.title || '').toLowerCase().trim());
+                if (originalItem && originalItem.poster_url) {
+                    // Validate and preserve the original poster_url
+                    const posterUrl = originalItem.poster_url;
+                    if (posterUrl && (posterUrl.startsWith('http://') || posterUrl.startsWith('https://') || posterUrl.startsWith('data:'))) {
+                        apiMovie.poster_url = posterUrl;
+                    }
+                }
+                // Ensure poster_url is valid, use placeholder if not
+                if (!apiMovie.poster_url || (!apiMovie.poster_url.startsWith('http://') && !apiMovie.poster_url.startsWith('https://') && !apiMovie.poster_url.startsWith('data:'))) {
+                    apiMovie.poster_url = `https://via.placeholder.com/300x450?text=${encodeURIComponent(apiMovie.title || 'No+Poster')}`;
+                }
+                return apiMovie;
+            });
+        } else {
+            // Fallback to original items if API doesn't return movies
+            loadedMovies = items.map(item => {
+                // Ensure poster_url is valid
+                if (!item.poster_url || (!item.poster_url.startsWith('http://') && !item.poster_url.startsWith('https://') && !item.poster_url.startsWith('data:'))) {
+                    item.poster_url = `https://via.placeholder.com/300x450?text=${encodeURIComponent(item.title || 'No+Poster')}`;
+                }
+                return item;
+            });
+        }
         if (sessionStatusSpan) sessionStatusSpan.textContent = `Loaded ${loadedMovies.length} custom items`;
         
         // Hide setup section and show selection section
